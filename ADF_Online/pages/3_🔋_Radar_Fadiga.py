@@ -121,3 +121,36 @@ fig_tatica.update_layout(
 )
 
 st.plotly_chart(fig_tatica, use_container_width=True)
+
+# No seu arquivo 2__Radar_Fadiga.py, adicione este gráfico:
+
+st.subheader("📖 Linha do Tempo: A História do Jogo vs. Intensidade")
+
+# Preparamos um DF que tem todos os minutos do tempo selecionado
+min_max = int(df_periodo['Interval'].max())
+timeline_game = pd.DataFrame({'Interval': range(1, min_max + 1)})
+timeline_game = pd.merge(timeline_game, df_periodo[['Interval', 'Placar']].drop_duplicates(), on='Interval', how='left')
+
+# Criamos o gráfico de "Área" para mostrar a flutuação do placar ao fundo
+fig_historia = px.area(timeline_game, x="Interval", y=[1]*len(timeline_game), color="Placar",
+                       title="Linha do Tempo: Contexto do Placar minuto a minuto",
+                       color_discrete_map=mapa_cores_placar,
+                       template='plotly_white',
+                       labels={'y': 'Jogo Ativo'})
+
+# Adicionamos pontos pretos (ou X) onde o ATLETA SELECIONADO não fez V4
+# (Precisa filtrar um atleta específico para esta visualização)
+atleta_foco = st.selectbox("Selecione um Atleta para ver na Timeline:", df_periodo['Name'].unique())
+df_atleta_ausente = df_periodo[(df_periodo['Name'] == atleta_foco) & (df_periodo[col_v4] <= 0)]
+
+fig_historia.add_trace(go.Scatter(
+    x=df_atleta_ausente['Interval'], 
+    y=[0.5]*len(df_atleta_ausente),
+    mode='markers',
+    name='Minuto sem V4',
+    marker=dict(color='black', symbol='x', size=8),
+    hovertemplate='Apagão no Minuto %{x}<extra></extra>'
+))
+
+fig_historia.update_layout(height=300, showlegend=True, yaxis={'visible': False})
+st.plotly_chart(fig_historia, use_container_width=True)
