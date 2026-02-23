@@ -5,6 +5,7 @@ import plotly.graph_objs as go
 import os
 import shutil
 import warnings
+import calamine
 
 # =====================================================================
 # 1. CONFIGURAÇÃO DA PÁGINA WEB E AJUSTE DE MARGEM
