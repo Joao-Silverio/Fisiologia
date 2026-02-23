@@ -93,11 +93,11 @@ with col_dir:
     st.plotly_chart(fig_heat, use_container_width=True)
 
 # ==========================================
-# 5. MAPA DE OCIOSIDADE SOBRE A HISTÓRIA DO JOGO (CORRIGIDO)
+# 5. MAPA DE OCIOSIDADE SOBRE A HISTÓRIA DO JOGO (DEFINITIVO)
 # ==========================================
 st.markdown("---")
 st.header("🕵️‍♂️ Mapa de Ociosidade sobre a História do Jogo")
-st.markdown("As barras coloridas aparecem **apenas** quando o atleta parou de correr. Onde o atleta agiu, a barra some e mostra o fundo.")
+st.markdown("As barras coloridas aparecem **apenas** quando o atleta parou de correr. Os espaços vazios representam os momentos de ação.")
 
 # 1. Configuração de Cores
 mapa_cores_placar = {
@@ -110,22 +110,25 @@ mapa_cores_placar = {
 min_max = int(df_periodo['Interval'].max())
 status_jogo = df_periodo[['Interval', 'Placar']].drop_duplicates().sort_values('Interval')
 
-# 3. FILTRAGEM CRUCIAL: Criamos o DF contendo APENAS os minutos de inatividade
-# Se o atleta correu > 0 em V4, o minuto é removido do gráfico
+# 3. FILTRAGEM: Apenas minutos ONDE O ATLETA NÃO CORREU
 df_apenas_ausencia = df_periodo[df_periodo[col_v4] <= 0].copy()
 
-# 4. Criação do Gráfico de Barras (Inatividade Real)
-# Usamos 'Interval' como um valor discreto para criar blocos separados
-fig_final = px.bar(
-    df_apenas_ausencia, 
-    x="Interval", 
-    y="Name", 
-    color="Placar",
-    color_discrete_map=mapa_cores_placar,
-    orientation='h',
-    template='plotly_white',
-    title=f"Cronologia de Inatividade - {periodo_sel}"
-)
+# 4. CONSTRUÇÃO DO GRÁFICO (O SEGREDO DOS BLOCOS)
+fig_final = go.Figure()
+
+# Desenhamos blocos exatos de 1 minuto para cada registro de ausência
+for placar_val in df_apenas_ausencia['Placar'].unique():
+    df_group = df_apenas_ausencia[df_apenas_ausencia['Placar'] == placar_val]
+    
+    fig_final.add_trace(go.Bar(
+        y=df_group['Name'],
+        x=[1] * len(df_group), # A largura da barra é sempre de exatamente 1 minuto
+        base=df_group['Interval'] - 0.5, # A barra é posicionada no minuto exato em que ocorreu
+        orientation='h',
+        name=placar_val,
+        marker_color=mapa_cores_placar.get(placar_val, '#888888'),
+        hovertemplate="Atleta: %{y}<br>Minuto: %{base}<extra></extra>"
+    ))
 
 # 5. PINTANDO O FUNDO (A HISTÓRIA DO JOGO)
 for i in range(len(status_jogo)):
@@ -139,11 +142,11 @@ for i in range(len(status_jogo)):
         layer="below", line_width=0,
     )
 
-# 6. AJUSTE DE "SUMIÇO": Forçamos o eixo X a tratar cada minuto como um bloco individual
-fig_final.update_traces(marker_line_width=0, width=0.8) # Largura menor que 1 cria o espaço vazio
-
+# 6. Ajustes de Layout
 fig_final.update_layout(
+    template='plotly_white',
     height=700,
+    barmode='overlay', # Garante que as barras não tentem se empilhar
     xaxis=dict(
         title="Linha do Tempo Real (Minutos)",
         tickmode='linear', dtick=5,
