@@ -53,7 +53,7 @@ def carregar_dados(hora_mod):
         colunas_necessarias = [
             'Data', 'Interval', 'Name', 'Período', 'Placar', 'Adversário',
             'Total Distance', 'V4 Dist', 'V4 To8 Eff', 'V5 To8 Eff', 
-            'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Player Load', 'Campeonato'
+            'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Player Load', 'Competição'
         ]
         df = pd.read_excel(arquivo_temp, engine='calamine', usecols=colunas_necessarias) 
         df.columns = df.columns.str.strip()
@@ -90,7 +90,7 @@ st.markdown("### 🔍 Filtros de Análise")
 with st.container():
     
     # --- O NOVO FILTRO GLOBAL MÚLTIPLO ---
-    lista_campeonatos = sorted(df_completo['Campeonato'].dropna().unique().tolist())
+    lista_campeonatos = sorted(df_completo['Competição'].dropna().unique().tolist())
     
     # O multiselect cria uma caixa elegante onde os campeonatos viram "tags"
     campeonatos_selecionados = st.multiselect(
