@@ -100,7 +100,7 @@ with st.container():
         if not metrica_selecionada:
             metrica_selecionada = "V4 Dist"
 
-    st.markdown("") # Espaço em branco para dar um respiro visual
+    #st.markdown("") # Espaço em branco para dar um respiro visual
 
     # Linha 2 e 3: O Seletor de Jogos e o Bloco de Atletas
     if modo_filtro == "Focar no Atleta":
