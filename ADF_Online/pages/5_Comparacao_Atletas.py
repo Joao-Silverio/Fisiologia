@@ -75,6 +75,9 @@ if 'HIA_Total' not in cols_existentes:
 # Agrupa tudo por Atleta somando o jogo todo
 df_agrupado = df_jogo.groupby('Name')[cols_existentes].sum().reset_index()
 
+# NOVA MÉTRICA: Soma de Acelerações e Desacelerações (Acc3 + Dec3)
+df_agrupado['AccDec_Total'] = df_agrupado.get('Acc3 Eff', 0) + df_agrupado.get('Dec3 Eff', 0)
+
 # Calcula os Minutos Jogados (Max Interval) por atleta
 minutos_jogados = df_jogo.groupby('Name')['Interval'].max().reset_index()
 df_agrupado = pd.merge(df_agrupado, minutos_jogados, on='Name')
@@ -98,8 +101,8 @@ c1.markdown(f"<h4 style='text-align: right; color: #EF5350; margin-bottom: 0;'>�
 c2.markdown(f"<h3 style='text-align: center; color: #bdbdbd;'>VS</h3>", unsafe_allow_html=True)
 c3.markdown(f"<h4 style='text-align: left; color: #42A5F5; margin-bottom: 0;'>🔵 {atleta_2}</h4><p style='text-align: left; margin-top: 0;'>{df_a2['Minutos Jogados']:.0f} min</p>", unsafe_allow_html=True)
 
-# Cria 4 colunas para os KPIs ficarem perfeitamente alinhados na horizontal
-col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
+# Agora com 5 colunas para acomodar a nova métrica Acc/Dec
+col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5 = st.columns(5)
 
 def kpi_card(col, label, val1, val2, unidade=""):
     cor1 = "#2E7D32" if val1 > val2 else "#C62828" if val1 < val2 else "gray" # Verde ganha, Vermelho perde
@@ -109,18 +112,19 @@ def kpi_card(col, label, val1, val2, unidade=""):
         st.markdown(f"""
         <div style='background-color: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #e0e0e0; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>
             <p style='color: #757575; margin-bottom: 8px; font-size: 14px; font-weight: bold;'>{label}</p>
-            <h4 style='margin-top: 0; font-size: 18px;'>
-                <span style='color: {cor1};'>{val1:.1f}{unidade}</span> 
-                <span style='color: #bdbdbd; font-size: 14px; margin: 0 5px;'>x</span> 
-                <span style='color: {cor2};'>{val2:.1f}{unidade}</span>
+            <h4 style='margin-top: 0; font-size: 17px;'>
+                <span style='color: {cor1};'>{val1:.0f}{unidade}</span> 
+                <span style='color: #bdbdbd; font-size: 14px; margin: 0 3px;'>x</span> 
+                <span style='color: {cor2};'>{val2:.0f}{unidade}</span>
             </h4>
         </div>
         """, unsafe_allow_html=True)
 
 kpi_card(col_kpi1, "Distância Total", df_a1.get('Total Distance', 0), df_a2.get('Total Distance', 0), "m")
-kpi_card(col_kpi2, "Alta Intensidade (HIA)", df_a1.get('HIA_Total', 0), df_a2.get('HIA_Total', 0), "")
-kpi_card(col_kpi3, "Alta Velocidade (V4)", df_a1.get('V4 Dist', 0), df_a2.get('V4 Dist', 0), "m")
-kpi_card(col_kpi4, "Player Load", df_a1.get('Player Load', 0), df_a2.get('Player Load', 0), "")
+kpi_card(col_kpi2, "HIA (Total)", df_a1.get('HIA_Total', 0), df_a2.get('HIA_Total', 0), "")
+kpi_card(col_kpi3, "V4 Distância", df_a1.get('V4 Dist', 0), df_a2.get('V4 Dist', 0), "m")
+kpi_card(col_kpi4, "Força (Acc/Dec)", df_a1.get('AccDec_Total', 0), df_a2.get('AccDec_Total', 0), "")
+kpi_card(col_kpi5, "Player Load", df_a1.get('Player Load', 0), df_a2.get('Player Load', 0), "")
 
 # ==========================================
 # 5. RADAR E GRÁFICOS DE LINHA (EM ABAS)
@@ -131,21 +135,34 @@ col_radar, col_timeline = st.columns([1, 1.4])
 with col_radar:
     st.subheader("🕸️ Perfil Fisiológico")
     
-    # Radar Chart
-    metricas_radar = ['Total Distance', 'V4 Dist', 'HIA_Total', 'Player Load']
+    # Radar Chart - Adicionando AccDec_Total na lista
+    metricas_radar = ['Total Distance', 'V4 Dist', 'HIA_Total', 'AccDec_Total', 'Player Load']
     metricas_radar = [m for m in metricas_radar if m in df_agrupado.columns]
+    
+    # Dicionário para deixar os nomes bonitos no gráfico
+    nomes_bonitos = {
+        'Total Distance': 'Distância',
+        'V4 Dist': 'Velocidade V4',
+        'HIA_Total': 'HIA Total',
+        'AccDec_Total': 'Força Acc/Dec',
+        'Player Load': 'Player Load'
+    }
     
     maximos_time = df_agrupado[metricas_radar].max()
     val1_norm = (df_a1[metricas_radar] / maximos_time * 100).fillna(0).tolist()
     val2_norm = (df_a2[metricas_radar] / maximos_time * 100).fillna(0).tolist()
     
+    # Fechar o círculo do radar
     val1_norm += [val1_norm[0]]
     val2_norm += [val2_norm[0]]
-    categorias = metricas_radar + [metricas_radar[0]]
+    
+    # Aplicar os nomes bonitos no eixo do radar
+    categorias_labels = [nomes_bonitos.get(m, m) for m in metricas_radar]
+    categorias_labels += [categorias_labels[0]]
     
     fig_radar = go.Figure()
-    fig_radar.add_trace(go.Scatterpolar(r=val1_norm, theta=categorias, fill='toself', name=atleta_1, line_color='#EF5350', fillcolor='rgba(239, 83, 80, 0.4)'))
-    fig_radar.add_trace(go.Scatterpolar(r=val2_norm, theta=categorias, fill='toself', name=atleta_2, line_color='#42A5F5', fillcolor='rgba(66, 165, 245, 0.4)'))
+    fig_radar.add_trace(go.Scatterpolar(r=val1_norm, theta=categorias_labels, fill='toself', name=atleta_1, line_color='#EF5350', fillcolor='rgba(239, 83, 80, 0.4)'))
+    fig_radar.add_trace(go.Scatterpolar(r=val2_norm, theta=categorias_labels, fill='toself', name=atleta_2, line_color='#42A5F5', fillcolor='rgba(66, 165, 245, 0.4)'))
 
     fig_radar.update_layout(
         polar=dict(radialaxis=dict(visible=True, range=[0, 100], ticksuffix="%")),
@@ -166,7 +183,7 @@ with col_timeline:
     df_min_a1['V4_Acum'] = df_min_a1.get('V4 Dist', pd.Series(0)).cumsum()
     df_min_a2['V4_Acum'] = df_min_a2.get('V4 Dist', pd.Series(0)).cumsum()
     
-    # Sprints Acumulados (V5) - Busca 'V5 Dist', se não achar, usa 'V5 To8 Eff'
+    # Sprints Acumulados (V5)
     col_sprint = 'V5 Dist' if 'V5 Dist' in df_jogo.columns else 'V5 To8 Eff'
     df_min_a1['V5_Acum'] = df_min_a1.get(col_sprint, pd.Series(0)).cumsum()
     df_min_a2['V5_Acum'] = df_min_a2.get(col_sprint, pd.Series(0)).cumsum()
@@ -196,7 +213,7 @@ with col_timeline:
         st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V4_Acum', 'Volume de V4 (m)'), use_container_width=True)
         
     with tab2:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V5_Acum', f'Volume de Sprint ({col_sprint})'), use_container_width=True)
+        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V5_Acum', f'Volume de Sprint'), use_container_width=True)
         
     with tab3:
         st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'AccDec_Acum', 'Ações de Acc/Dec'), use_container_width=True)
