@@ -72,49 +72,64 @@ coluna_jogo = 'Data'
 coluna_minuto = 'Interval'
 
 # =====================================================================
-# 3. FILTROS NA TELA (SISTEMA HIERÁRQUICO INTELIGENTE COM BLOCOS)
+# 3. FILTROS NA TELA PRINCIPAL (LAYOUT HORIZONTAL SUPERIOR)
 # =====================================================================
-st.sidebar.header("Filtros de Análise")
+st.markdown("### 🔍 Filtros de Análise")
 
-modo_filtro = st.sidebar.radio("Prioridade da Busca:", ("Focar no Atleta", "Focar no Jogo"), horizontal=True)
+# Criamos uma caixa invisível para agrupar os filtros
+with st.container():
+    
+    # Linha 1: Modo de Busca e Seleção da Métrica (Lado a Lado)
+    col_modo, col_metrica = st.columns 2)
+    
+    with col_modo:
+        modo_filtro = st.radio("Prioridade da Busca:", ("Focar no Atleta", "Focar no Jogo"), horizontal=True)
+    with col_metrica:
+        metrica_selecionada = st.pills("3. Selecione a Métrica", ["Total Distance", "V4 Dist", "HIA"], default="V4 Dist")
+        if not metrica_selecionada:
+            metrica_selecionada = "V4 Dist"
 
-if modo_filtro == "Focar no Atleta":
-    lista_atletas = df_completo['Name'].dropna().unique()
-    atletas_ordenados = sorted(lista_atletas)
-    
-    # Substituindo Selectbox por Blocos (Pills)
-    atleta_selecionado = st.sidebar.pills("1. Selecione o Atleta", atletas_ordenados, default=atletas_ordenados[0])
-    # Trava de segurança: se desmarcar o bloco sem querer, volta pro primeiro
-    if not atleta_selecionado:
-        atleta_selecionado = atletas_ordenados[0]
-    
-    df_filtrado = df_completo[df_completo['Name'] == atleta_selecionado]
-    jogos_unicos = df_filtrado.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)
-    lista_jogos_display = jogos_unicos['Data_Display'].tolist()
-    jogo_selecionado_display = st.sidebar.selectbox("2. Selecione o Jogo", lista_jogos_display)
-    
-else:
-    jogos_unicos = df_completo.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)
-    lista_jogos_display = jogos_unicos['Data_Display'].tolist()
-    jogo_selecionado_display = st.sidebar.selectbox("1. Selecione o Jogo", lista_jogos_display)
-    
-    df_filtrado = df_completo[df_completo['Data_Display'] == jogo_selecionado_display]
-    lista_atletas = df_filtrado['Name'].dropna().unique()
-    atletas_ordenados = sorted(lista_atletas)
-    
-    # Substituindo Selectbox por Blocos (Pills)
-    atleta_selecionado = st.sidebar.pills("2. Selecione o Atleta", atletas_ordenados, default=atletas_ordenados[0])
-    # Trava de segurança
-    if not atleta_selecionado:
-        atleta_selecionado = atletas_ordenados[0]
+    st.markdown("") # Espaço em branco para dar um respiro visual
+
+    # Linha 2 e 3: O Seletor de Jogos e o Bloco de Atletas
+    if modo_filtro == "Focar no Atleta":
+        lista_atletas = df_completo['Name'].dropna().unique()
+        atletas_ordenados = sorted(lista_atletas)
+        
+        # Atletas ocupando a largura total (quebram a linha sozinhos)
+        atleta_selecionado = st.pills("1. Selecione o Atleta", atletas_ordenados, default=atletas_ordenados[0])
+        if not atleta_selecionado:
+            atleta_selecionado = atletas_ordenados[0]
+        
+        df_filtrado = df_completo[df_completo['Name'] == atleta_selecionado]
+        jogos_unicos = df_filtrado.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)
+        lista_jogos_display = jogos_unicos['Data_Display'].tolist()
+        
+        # Colocamos o selectbox do jogo numa coluna menor para não ficar uma barra gigante
+        col_jogo, _ = st.columns([1, 2]) 
+        with col_jogo:
+            jogo_selecionado_display = st.selectbox("2. Selecione o Jogo", lista_jogos_display)
+        
+    else:
+        jogos_unicos = df_completo.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)
+        lista_jogos_display = jogos_unicos['Data_Display'].tolist()
+        
+        col_jogo, _ = st.columns([1, 2])
+        with col_jogo:
+            jogo_selecionado_display = st.selectbox("1. Selecione o Jogo", lista_jogos_display)
+        
+        df_filtrado = df_completo[df_completo['Data_Display'] == jogo_selecionado_display]
+        lista_atletas = df_filtrado['Name'].dropna().unique()
+        atletas_ordenados = sorted(lista_atletas)
+        
+        atleta_selecionado = st.pills("2. Selecione o Atleta", atletas_ordenados, default=atletas_ordenados[0])
+        if not atleta_selecionado:
+            atleta_selecionado = atletas_ordenados[0]
+
+st.markdown("---") # Linha divisória antes de começar os gráficos
 
 # Recupera a data original escondida
 jogo_selecionado = df_completo[df_completo['Data_Display'] == jogo_selecionado_display]['Data'].iloc[0]
-
-# Deixando as métricas em formato de bloco também para um visual mais "Dashboard"
-metrica_selecionada = st.sidebar.pills("3. Selecione a Métrica", ["Total Distance", "V4 Dist", "HIA"], default="V4 Dist")
-if not metrica_selecionada:
-    metrica_selecionada = "V4 Dist"
 
 # Define as colunas conforme a métrica
 if metrica_selecionada == "Total Distance":
