@@ -9,9 +9,20 @@ import warnings
 from streamlit_autorefresh import st_autorefresh
 
 # =====================================================================
-# 1. CONFIGURAÇÃO DA PÁGINA WEB
+# 1. CONFIGURAÇÃO DA PÁGINA WEB E AJUSTE DE MARGEM
 # =====================================================================
 st.set_page_config(page_title="Live Tracker Físico", layout="wide")
+
+# CSS para remover o espaço gigante do topo
+st.markdown("""
+    <style>
+        .block-container {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
 contador = st_autorefresh(interval=60000, limit=1000, key="live_tracker_refresh")
 
 st.title('⚽ Live Tracker: Projeção de Carga Física')
