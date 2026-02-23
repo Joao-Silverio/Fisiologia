@@ -1,0 +1,95 @@
+# O código a seguir para criar um dataframe e remover as linhas duplicadas sempre é executado e age como um preâmbulo para o script: 
+
+# dataset = pandas.DataFrame(Minuto, Jogo, .Dist Acumulado Jogo + Tempo)
+# dataset = dataset.drop_duplicates()
+
+# Cole ou digite aqui seu código de script:
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
+
+# O Power BI cria o 'dataset' automaticamente. Removemos possíveis nulos.
+df = dataset.dropna(subset=['Minuto', '.Dist Acumulado Jogo + Tempo']).copy()
+
+# Descobrir qual jogo está incompleto (o atual) e quais são os históricos completos
+max_minutos_por_jogo = df.groupby('Jogo')['Minuto'].max()
+jogo_atual_nome = max_minutos_por_jogo.idxmin() # O jogo com menos minutos
+minuto_atual_max = max_minutos_por_jogo.min() # O último minuto desse jogo (ex: min 11)
+minuto_final_partida = max_minutos_por_jogo.max() # O último minuto dos jogos completos (ex: min 51)
+
+# Separar os dados para o Machine Learning
+df_historico = df[df['Jogo'] != jogo_atual_nome].copy()
+df_atual = df[df['Jogo'] == jogo_atual_nome].copy()
+
+# --- 1. TREINAR O MODELO DE ML ---
+# Preparamos os dados dos jogos antigos (X = Minuto, y = Distância)
+X_train = df_historico[['Minuto']].values
+y_train = df_historico['.Dist Acumulado Jogo + Tempo'].values
+
+# Usamos grau 2 para capturar a leve curva de cansaço natural do futebol
+poly = PolynomialFeatures(degree=2)
+X_train_poly = poly.fit_transform(X_train)
+
+# Treinamos o modelo com o padrão de corrida dos jogos passados
+modelo = LinearRegression()
+modelo.fit(X_train_poly, y_train)
+
+# --- 2. GERAR A PREVISÃO PARA O JOGO ATUAL ---
+# Criamos a lista de minutos futuros (ex: do 12 ao 51)
+minutos_futuros = np.arange(minuto_atual_max + 1, minuto_final_partida + 1).reshape(-1, 1)
+
+if len(minutos_futuros) > 0:
+    # O modelo prevê o futuro baseado no que aprendeu do histórico
+    X_futuro_poly = poly.transform(minutos_futuros)
+    y_pred = modelo.predict(X_futuro_poly)
+
+    # AJUSTE FINO: Fazer a previsão "nascer" exatamente do último ponto real da linha laranja
+    # Prevemos qual seria o valor no minuto atual segundo o modelo, e vemos a diferença para a realidade
+    X_atual_max_poly = poly.transform([[minuto_atual_max]])
+    pred_no_minuto_atual = modelo.predict(X_atual_max_poly)[0]
+    valor_real_atual = df_atual[df_atual['Minuto'] == minuto_atual_max]['.Dist Acumulado Jogo + Tempo'].values[0]
+
+    diferenca = valor_real_atual - pred_no_minuto_atual
+
+    # Deslocamos toda a curva prevista para conectar perfeitamente no gráfico
+    y_pred_ajustado = y_pred + diferenca
+else:
+    minutos_futuros = []
+    y_pred_ajustado = []
+
+# --- 3. DESENHAR O GRÁFICO (Estilo similar ao seu do Power BI) ---
+plt.figure(figsize=(12, 6), facecolor='#2B3252') # Cor de fundo parecida com seu dashboard
+ax = plt.gca()
+ax.set_facecolor('#2B3252')
+
+# Plota os jogos históricos (Linhas base)
+for jogo in df_historico['Jogo'].unique():
+    df_j = df_historico[df_historico['Jogo'] == jogo].sort_values('Minuto')
+    plt.plot(df_j['Minuto'], df_j['.Dist Acumulado Jogo + Tempo'], color='#118DFF', linestyle=':', linewidth=2, label=jogo)
+
+# Plota o jogo atual real (Linha laranja)
+df_atual = df_atual.sort_values('Minuto')
+plt.plot(df_atual['Minuto'], df_atual['.Dist Acumulado Jogo + Tempo'], color='#E85D04', linewidth=3, label=jogo_atual_nome)
+
+# Plota a projeção de ML
+if len(minutos_futuros) > 0:
+    plt.plot(minutos_futuros, y_pred_ajustado, color='#E85D04', linestyle='--', linewidth=2, label=f'Previsão ML ({jogo_atual_nome})')
+
+# Estética geral
+plt.title(f'Projeção de Distância Acumulada via ML', color='white', fontsize=14)
+plt.xlabel('Minuto', color='white')
+plt.ylabel('Distância', color='white')
+plt.xticks(np.arange(1, minuto_final_partida + 1, 2), color='white')
+plt.yticks(color='white')
+ax.spines['bottom'].set_color('white')
+ax.spines['left'].set_color('white')
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+plt.grid(axis='y', linestyle='--', alpha=0.3)
+plt.legend(facecolor='#2B3252', edgecolor='white', labelcolor='white')
+
+plt.tight_layout()
+plt.show()
