@@ -83,32 +83,32 @@ coluna_jogo = 'Data'
 coluna_minuto = 'Interval'
 
 # =====================================================================
-# 3. FILTROS NA TELA PRINCIPAL (LAYOUT HORIZONTAL SUPERIOR)
+# 3. FILTROS NA TELA PRINCIPAL (LAYOUT HORIZONTAL COMPACTO)
 # =====================================================================
 st.markdown("### 🔍 Filtros de Análise")
 
-# Criamos uma caixa invisível para agrupar os filtros
 with st.container():
+    # Linha 1: 4 Colunas para deixar todos os controles lado a lado
+    col1, col2, col3, col4 = st.columns([1.5, 1.5, 1.5, 1.5])
     
-    # Linha 1: Modo de Busca e Seleção da Métrica (Lado a Lado)
-    col_modo, col_metrica = st.columns (2)
-    
-    with col_modo:
-        modo_filtro = st.radio("Prioridade da Busca:", ("Focar no Atleta", "Focar no Jogo"), horizontal=True)
-    with col_metrica:
-        metrica_selecionada = st.pills("3. Selecione a Métrica", ["Total Distance", "V4 Dist", "HIA"], default="V4 Dist")
+    with col1:
+        modo_filtro = st.radio("Prioridade:", ("Focar no Atleta", "Focar no Jogo"), horizontal=True)
+        
+    with col3:
+        metrica_selecionada = st.pills("Métrica:", ["Total Distance", "V4 Dist", "HIA"], default="V4 Dist")
         if not metrica_selecionada:
             metrica_selecionada = "V4 Dist"
+            
+    with col4:
+        ordem_graficos = st.radio("Ordem na Tela:", ("1º Tempo no Topo", "2º Tempo no Topo"), horizontal=True)
 
-    #st.markdown("") # Espaço em branco para dar um respiro visual
-
-    # Linha 2 e 3: O Seletor de Jogos e o Bloco de Atletas
+    # A lógica de quem filtra quem (Jogo e Atleta)
     if modo_filtro == "Focar no Atleta":
         lista_atletas = df_completo['Name'].dropna().unique()
         atletas_ordenados = sorted(lista_atletas)
         
-        # Atletas ocupando a largura total (quebram a linha sozinhos)
-        atleta_selecionado = st.pills("1. Selecione o Atleta", atletas_ordenados, default=atletas_ordenados[0])
+        # Linha 2 (Fora das colunas): Atletas ocupando a tela toda
+        atleta_selecionado = st.pills("Selecione o Atleta:", atletas_ordenados, default=atletas_ordenados[0])
         if not atleta_selecionado:
             atleta_selecionado = atletas_ordenados[0]
         
@@ -116,28 +116,26 @@ with st.container():
         jogos_unicos = df_filtrado.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)
         lista_jogos_display = jogos_unicos['Data_Display'].tolist()
         
-        # Colocamos o selectbox do jogo numa coluna menor para não ficar uma barra gigante
-        col_jogo, _ = st.columns([1, 2]) 
-        with col_jogo:
-            jogo_selecionado_display = st.selectbox("2. Selecione o Jogo", lista_jogos_display)
+        with col2:
+            jogo_selecionado_display = st.selectbox("Selecione o Jogo:", lista_jogos_display)
         
     else:
         jogos_unicos = df_completo.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)
         lista_jogos_display = jogos_unicos['Data_Display'].tolist()
         
-        col_jogo, _ = st.columns([1, 2])
-        with col_jogo:
-            jogo_selecionado_display = st.selectbox("1. Selecione o Jogo", lista_jogos_display)
+        with col2:
+            jogo_selecionado_display = st.selectbox("Selecione o Jogo:", lista_jogos_display)
         
         df_filtrado = df_completo[df_completo['Data_Display'] == jogo_selecionado_display]
         lista_atletas = df_filtrado['Name'].dropna().unique()
         atletas_ordenados = sorted(lista_atletas)
         
-        atleta_selecionado = st.pills("2. Selecione o Atleta", atletas_ordenados, default=atletas_ordenados[0])
+        # Linha 2 (Fora das colunas): Atletas ocupando a tela toda
+        atleta_selecionado = st.pills("Selecione o Atleta:", atletas_ordenados, default=atletas_ordenados[0])
         if not atleta_selecionado:
             atleta_selecionado = atletas_ordenados[0]
 
-st.markdown("---") # Linha divisória antes de começar os gráficos
+# (Removido o st.markdown("---") para tirar a linha divisória)
 
 # Recupera a data original escondida
 jogo_selecionado = df_completo[df_completo['Data_Display'] == jogo_selecionado_display]['Data'].iloc[0]
@@ -162,11 +160,12 @@ df_atleta = df_completo[df_completo['Name'] == atleta_selecionado].copy()
 # =====================================================================
 # 4. MOTOR DE GERAÇÃO DOS GRÁFICOS E ML (1º e 2º TEMPO)
 # =====================================================================
-periodos_para_analise = [1, 2]
+# Define a ordem dos gráficos dinamicamente com base no filtro
+periodos_para_analise = [1, 2] if ordem_graficos == "1º Tempo no Topo" else [2, 1]
 
 for periodo in periodos_para_analise:
     
-    st.markdown("---")
+    #st.markdown("---")
     st.markdown(f"### ⏱️ Análise Fisiológica - {periodo}º Tempo")
 
     # Filtra o dataframe SÓ para o tempo que está sendo desenhado agora
