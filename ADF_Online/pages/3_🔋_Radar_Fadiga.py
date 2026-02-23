@@ -72,6 +72,28 @@ if atletas_em_alerta:
     st.error(f"⚠️ **ALERTA DE INTENSIDADE (V4):** Atletas com longo tempo sem estímulo de Alta Velocidade: {', '.join(atletas_em_alerta)}")
 
 # ==========================================
+# ANALISE TATICA
+# ==========================================
+
+# Criar coluna de status do placar (exemplo baseado na sua lógica de ML)
+def verificar_status(row):
+    if 'Ganhando 1' in row and row['Ganhando 1'] == 1: return "Ganhando"
+    if 'Perdendo 1' in row and row['Perdendo 1'] == 1: return "Perdendo"
+    return "Empatando"
+
+df_ausente['Status_Placar'] = df_ausente.apply(verificar_status, axis=1)
+
+# Novo Gráfico de Ranking com Contexto Tático
+fig_rank = px.bar(df_ausente.groupby(['Name', 'Status_Placar']).size().reset_index(name='Minutos'), 
+                 y="Name", x="Minutos", color="Status_Placar",
+                 title="Minutos de 'Apagão' por Status do Placar",
+                 color_discrete_map={"Ganhando": "#2E7D32", "Perdendo": "#C62828", "Empatando": "#F9A825"},
+                 template='plotly_white', orientation='h')
+
+fig_rank.update_layout(barmode='stack', yaxis={'categoryorder':'total ascending'})
+st.plotly_chart(fig_rank, use_container_width=True)
+
+# ==========================================
 # 4. GRÁFICOS
 # ==========================================
 col_esq, col_dir = st.columns([1, 1])
