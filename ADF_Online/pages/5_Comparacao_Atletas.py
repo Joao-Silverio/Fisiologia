@@ -32,7 +32,7 @@ st.markdown("### 🔍 Configuração do Duelo")
 
 with st.container():
     # 5 colunas em uma única linha. O Jogo (c2) recebe um pouco mais de espaço porque o nome é maior.
-    c1, c2, c3, c4, c5 = st.columns([1.2, 1.8, 1, 1.2, 1.2])
+    c1, c2, c3, c4, c5 = st.columns([1.2, 1.5, 1.3, 1.2, 1.2])
     
     with c1:
         competicao_sel = st.multiselect("🏆 Competição:", options=df_base['Competição'].unique().tolist() if 'Competição' in df_base.columns else [])
