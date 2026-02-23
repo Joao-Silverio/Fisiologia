@@ -5,95 +5,48 @@ import plotly.graph_objs as go
 import plotly.express as px
 import shutil
 import os
+import warnings
 from streamlit_autorefresh import st_autorefresh
 
+# =====================================================================
 # 1. CONFIGURAÇÃO DA PÁGINA WEB
+# =====================================================================
 st.set_page_config(page_title="Live Tracker Físico", layout="wide")
-
-# =====================================================================
-# AUTO-REFRESH (Atualiza a página a cada 60 segundos)
-# =====================================================================
 contador = st_autorefresh(interval=60000, limit=1000, key="live_tracker_refresh")
 
 st.title('⚽ Live Tracker: Projeção de Carga Física')
 st.caption(f"Última atualização automática: Ciclo {contador}")
 
-import warnings
-
-# 1. Esconde os avisos chatos do openpyxl sobre validação de dados
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
-import os
-import shutil
-import warnings
-
-warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
-
-# 1. Função que descobre exatamente a que horas o ficheiro foi guardado pela última vez
+# =====================================================================
+# 2. CARREGAMENTO DE DADOS (Caminhos Dinâmicos e Engine Rápida)
+# =====================================================================
 def obter_hora_modificacao(caminho_ficheiro):
     try:
         return os.path.getmtime(caminho_ficheiro)
     except FileNotFoundError:
         return 0
 
-arquivo_original = 'Teste gemini.xlsx - Planilha1.csv' # Substitua pelo nome correto do seu CSV final
-hora_atualizacao = obter_hora_modificacao(arquivo_original)
-
-# 2. CARREGAR OS DADOS (Agora SEM o ttl=10. O cache só recarrega se a "hora_mod" mudar)
-import os
-import shutil
-import warnings
-
-warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
-
-def obter_hora_modificacao(caminho_ficheiro):
-    try:
-        return os.path.getmtime(caminho_ficheiro)
-    except FileNotFoundError:
-        return 0
-
-# 1. Descobre onde este arquivo (.py) está rodando (ele vai achar a pasta "pages")
 DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
-
-# 2. Dá um passo para trás, saindo da pasta "pages" e voltando para a raiz do projeto
 DIRETORIO_RAIZ = os.path.dirname(DIRETORIO_ATUAL)
-
-# 3. Junta o caminho da raiz com o nome do seu Excel
 arquivo_original = os.path.join(DIRETORIO_RAIZ, 'ADF OnLine 2024.xlsb')
 
+hora_atualizacao = obter_hora_modificacao(arquivo_original)
 
 @st.cache_resource(show_spinner=False)
 def carregar_dados(hora_mod):
     arquivo_temp = 'ADF_TEMP_LIVE.xlsb'
-    
     try:
-        # A cópia sombra garante que o Python não brigue com o seu Excel quando você apertar "Salvar"
         shutil.copy2(arquivo_original, arquivo_temp)
-        
-        # 1. Lista com EXATAMENTE as colunas que o Live Tracker precisa
         colunas_necessarias = [
             'Data', 'Interval', 'Name', 'Período', 'Placar', 'Adversário',
             'Total Distance', 'V4 Dist', 'V4 To8 Eff', 'V5 To8 Eff', 
-            'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Player Load'  # <-- ADICIONADO
+            'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Player Load'
         ]
-        
-        # 2. Lemos o Excel usando o motor ultra-rápido (calamine) e SÓ as colunas que importam
-        df = pd.read_excel(
-            arquivo_temp, 
-            engine='calamine', 
-            usecols=colunas_necessarias
-        ) 
-        
+        df = pd.read_excel(arquivo_temp, engine='calamine', usecols=colunas_necessarias) 
         df.columns = df.columns.str.strip()
         return df
-        
-    except PermissionError:
-        st.toast("⏳ O Excel está aberto e sendo salvo. O painel vai atualizar no próximo ciclo.")
-        return None
-    except ValueError as e:
-        # Prevenção: Se faltar alguma coluna na lista acima, ele avisa em vez de quebrar
-        st.error(f"Erro nas colunas: {e}")
-        return None
     except Exception as e:
         st.error(f"Erro na leitura: {e}")
         return None
@@ -103,29 +56,71 @@ df_completo = carregar_dados(hora_atualizacao)
 if df_completo is None:
     st.stop()
 
-# Formatar datas para exibição bonita (dd/mm/yyyy Adversário)
+# Criar a métrica HIA somando ações de alta intensidade
+df_completo['HIA'] = (
+    df_completo['V4 To8 Eff'].fillna(0) + 
+    df_completo['V5 To8 Eff'].fillna(0) + 
+    df_completo['V6 To8 Eff'].fillna(0) + 
+    df_completo['Acc3 Eff'].fillna(0) + 
+    df_completo['Dec3 Eff'].fillna(0)
+)
+
+# Formatar datas para exibição bonita
 df_completo['Data_Display'] = pd.to_datetime(df_completo['Data']).dt.strftime('%d/%m/%Y') + ' ' + df_completo['Adversário'].astype(str)
 
-# CORREÇÃO: RECRIANDO A VARIÁVEL df_atleta AQUI PARA EVITAR ERROS
-df_atleta = df_completo[df_completo['Name'] == atleta_selecionado].copy()
-
-# Definição das colunas base
 coluna_jogo = 'Data'
 coluna_minuto = 'Interval'
 
 # =====================================================================
-# FILTRO DE JOGO E MOTOR DE GERAÇÃO DOS GRÁFICOS (1º e 2º TEMPO)
+# 3. FILTROS NA TELA (SISTEMA HIERÁRQUICO INTELIGENTE)
 # =====================================================================
-# Filtro para o jogo selecionado
-lista_jogos = df_atleta[coluna_jogo].unique()
-lista_jogos_com_display = [(jogo, df_completo[df_completo['Data'] == jogo]['Data_Display'].iloc[0]) for jogo in lista_jogos if jogo in df_completo['Data'].values]
-lista_jogos_com_display = sorted(lista_jogos_com_display, key=lambda x: x[0], reverse=True)
-lista_jogos_display = [display for _, display in lista_jogos_com_display]
+st.sidebar.header("Filtros de Análise")
 
-jogo_selecionado_display = st.sidebar.selectbox("Selecione o Jogo para Projeção", lista_jogos_display)
-jogo_selecionado = next((data for data, display in lista_jogos_com_display if display == jogo_selecionado_display), jogo_selecionado_display)
+modo_filtro = st.sidebar.radio("Prioridade da Busca:", ("Focar no Atleta", "Focar no Jogo"), horizontal=True)
 
-# Fixamos a lista para SEMPRE gerar os dois gráficos
+if modo_filtro == "Focar no Atleta":
+    lista_atletas = df_completo['Name'].dropna().unique()
+    atleta_selecionado = st.sidebar.selectbox("1. Selecione o Atleta", sorted(lista_atletas))
+    
+    df_filtrado = df_completo[df_completo['Name'] == atleta_selecionado]
+    jogos_unicos = df_filtrado.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)
+    lista_jogos_display = jogos_unicos['Data_Display'].tolist()
+    jogo_selecionado_display = st.sidebar.selectbox("2. Selecione o Jogo", lista_jogos_display)
+    
+else:
+    jogos_unicos = df_completo.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)
+    lista_jogos_display = jogos_unicos['Data_Display'].tolist()
+    jogo_selecionado_display = st.sidebar.selectbox("1. Selecione o Jogo", lista_jogos_display)
+    
+    df_filtrado = df_completo[df_completo['Data_Display'] == jogo_selecionado_display]
+    lista_atletas = df_filtrado['Name'].dropna().unique()
+    atleta_selecionado = st.sidebar.selectbox("2. Selecione o Atleta", sorted(lista_atletas))
+
+# Recupera a data original escondida
+jogo_selecionado = df_completo[df_completo['Data_Display'] == jogo_selecionado_display]['Data'].iloc[0]
+
+metrica_selecionada = st.sidebar.selectbox("3. Selecione a Métrica", ["Total Distance", "V4 Dist", "HIA"])
+
+# Define as colunas conforme a métrica
+if metrica_selecionada == "Total Distance":
+    coluna_distancia = 'Total Distance'
+    coluna_acumulada = 'Dist Acumulada'
+    titulo_grafico = f'Projeção de Distância - {atleta_selecionado}'
+elif metrica_selecionada == "V4 Dist":
+    coluna_distancia = 'V4 Dist'
+    coluna_acumulada = 'V4 Dist Acumulada'
+    titulo_grafico = f'Projeção de V4 Dist - {atleta_selecionado}'
+else:
+    coluna_distancia = 'HIA'
+    coluna_acumulada = 'HIA Acumulada'
+    titulo_grafico = f'Projeção de HIA - {atleta_selecionado}'
+
+# Filtra o dataframe base para o atleta escolhido
+df_atleta = df_completo[df_completo['Name'] == atleta_selecionado].copy()
+
+# =====================================================================
+# 4. MOTOR DE GERAÇÃO DOS GRÁFICOS E ML (1º e 2º TEMPO)
+# =====================================================================
 periodos_para_analise = [1, 2]
 
 for periodo in periodos_para_analise:
@@ -140,6 +135,7 @@ for periodo in periodos_para_analise:
     df_periodo = df_periodo.sort_values(by=[coluna_jogo, coluna_minuto])
     df_periodo['Dist Acumulada'] = df_periodo.groupby(coluna_jogo)['Total Distance'].cumsum()
     df_periodo['V4 Dist Acumulada'] = df_periodo.groupby(coluna_jogo)['V4 Dist'].cumsum()
+    df_periodo['HIA Acumulada'] = df_periodo.groupby(coluna_jogo)['HIA'].cumsum()
     
     if 'Player Load' in df_periodo.columns:
         df_periodo['Player Load Acumulada'] = df_periodo.groupby(coluna_jogo)['Player Load'].cumsum()
@@ -150,7 +146,7 @@ for periodo in periodos_para_analise:
         max_minutos_por_jogo = df.groupby(coluna_jogo)[coluna_minuto].max()
         jogo_atual_nome = jogo_selecionado
         
-        # Se o jogador não jogou este tempo no jogo selecionado, avisa e pula pro próximo
+        # Se o jogador não atuou neste tempo no jogo selecionado, avisa e pula pro próximo
         if jogo_atual_nome not in max_minutos_por_jogo.index:
             st.warning(f"O atleta selecionado não possui dados ou não atuou no {periodo}º Tempo deste jogo.")
             continue
@@ -158,7 +154,7 @@ for periodo in periodos_para_analise:
         minuto_atual_max = int(max_minutos_por_jogo[jogo_atual_nome])
         minuto_final_partida = int(max_minutos_por_jogo.max())
         
-        # O Slider de projeção fica exatamente acima do gráfico correspondente
+        # Slider independente por gráfico
         minuto_projecao_ate = st.slider(
             f"Projetar o {periodo}º Tempo até o minuto:",
             min_value=minuto_atual_max,
@@ -168,17 +164,14 @@ for periodo in periodos_para_analise:
             key=f"slider_projecao_{periodo}" 
         ) 
 
-        # Separar os dados atuais dos históricos para ESTE TEMPO
+        # Separar os dados
         df_historico = df[df[coluna_jogo] != jogo_atual_nome].copy()
         df_atual = df[df[coluna_jogo] == jogo_atual_nome].sort_values(coluna_minuto)
 
         if not df_historico.empty and not df_atual.empty:
             
-            # =====================================================================
-            # INTELIGÊNCIA ARTIFICIAL: PROJEÇÃO HÍBRIDA
-            # =====================================================================
+            # Inteligência Artificial
             col_placar = 'Placar'
-            
             media_min_geral = df_historico.groupby(coluna_minuto)[coluna_distancia].mean()
             
             if col_placar in df_atual.columns and col_placar in df_historico.columns:
@@ -241,9 +234,7 @@ for periodo in periodos_para_analise:
             pred_superior = [val * (1 + margem_erro) for val in acumulado_pred]
             pred_inferior = [val * (1 - margem_erro) for val in acumulado_pred]
 
-            # =====================================================================
-            # KPIs - ACIMA DO GRÁFICO 
-            # =====================================================================
+            # KPIs
             carga_atual = valor_atual_acumulado
             carga_projetada = acumulado_pred[-1] if len(acumulado_pred) > 0 else carga_atual
             
@@ -274,9 +265,7 @@ for periodo in periodos_para_analise:
             k3.metric(f"Ritmo Previsto (min {minuto_final_proj})", fmt_pct(delta_projetado_pct), delta=fmt_pct(delta_projetado_pct), delta_color=cor_delta)
             k4.metric(f"Desgaste Sistêmico (PL)", f"{pl_atual_acumulado:.0f}", delta=fmt_pct(delta_pl_pct), delta_color="inverse")
 
-            # =====================================================================
-            # DESENHAR O GRÁFICO COM PLOTLY 
-            # =====================================================================
+            # Gráfico Plotly
             fig = go.Figure()
             jogos_historicos = df_historico[coluna_jogo].unique()
             colors = px.colors.qualitative.Plotly
