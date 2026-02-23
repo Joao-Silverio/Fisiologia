@@ -90,7 +90,7 @@ st.markdown("### 🔍 Filtros de Análise")
 with st.container():
     
     # --- O NOVO FILTRO GLOBAL MÚLTIPLO ---
-    lista_campeonatos = sorted(df_completo['Campeonato'].dropna().unique().tolist())
+    lista_campeonatos = sorted(df_completo['Competição'].dropna().unique().tolist())
     
     campeonatos_selecionados = st.multiselect(
         "🏆 Campeonatos (Deixe vazio para incluir TODOS):", 
@@ -102,7 +102,7 @@ with st.container():
     if not campeonatos_selecionados: 
         df_base = df_completo.copy()
     else:
-        df_base = df_completo[df_completo['Campeonato'].isin(campeonatos_selecionados)].copy()
+        df_base = df_completo[df_completo['Competição'].isin(campeonatos_selecionados)].copy()
 
     # Linha 1: 4 Colunas para deixar todos os controles lado a lado
     col1, col2, col3, col4 = st.columns([1.5, 1.5, 1.5, 1.5])
