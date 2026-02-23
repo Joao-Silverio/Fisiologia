@@ -106,6 +106,9 @@ if df_completo is None:
 # Formatar datas para exibição bonita (dd/mm/yyyy Adversário)
 df_completo['Data_Display'] = pd.to_datetime(df_completo['Data']).dt.strftime('%d/%m/%Y') + ' ' + df_completo['Adversário'].astype(str)
 
+# CORREÇÃO: RECRIANDO A VARIÁVEL df_atleta AQUI PARA EVITAR ERROS
+df_atleta = df_completo[df_completo['Name'] == atleta_selecionado].copy()
+
 # Definição das colunas base
 coluna_jogo = 'Data'
 coluna_minuto = 'Interval'
