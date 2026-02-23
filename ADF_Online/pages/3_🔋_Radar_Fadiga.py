@@ -93,13 +93,13 @@ with col_dir:
     st.plotly_chart(fig_heat, use_container_width=True)
 
 # ==========================================
-# 5. MAPA DE OCIOSIDADE COM FUNDO TÁTICO (FUSÃO TOTAL)
+# 5. MAPA DE OCIOSIDADE SOBRE A HISTÓRIA DO JOGO (CORRIGIDO)
 # ==========================================
 st.markdown("---")
 st.header("🕵️‍♂️ Mapa de Ociosidade sobre a História do Jogo")
-st.markdown("O fundo colorido mostra o **Placar**. As barras sólidas mostram quando o atleta **parou de correr (>19km/h)**.")
+st.markdown("As barras coloridas aparecem **apenas** quando o atleta parou de correr. Onde o atleta agiu, a barra some e mostra o fundo.")
 
-# 1. Configuração de Cores (Padronizada)
+# 1. Configuração de Cores
 mapa_cores_placar = {
     "Ganhando 1": "#2E7D32", "Ganhando 2": "#1B5E20", 
     "Perdendo 1": "#C62828", "Perdendo 2": "#B71C1C", 
@@ -110,10 +110,14 @@ mapa_cores_placar = {
 min_max = int(df_periodo['Interval'].max())
 status_jogo = df_periodo[['Interval', 'Placar']].drop_duplicates().sort_values('Interval')
 
-# 3. Criação do Gráfico de Barras (Inatividade Real)
-# Usamos o df_ausente para desenhar apenas onde NÃO HOUVE ação
+# 3. FILTRAGEM CRUCIAL: Criamos o DF contendo APENAS os minutos de inatividade
+# Se o atleta correu > 0 em V4, o minuto é removido do gráfico
+df_apenas_ausencia = df_periodo[df_periodo[col_v4] <= 0].copy()
+
+# 4. Criação do Gráfico de Barras (Inatividade Real)
+# Usamos 'Interval' como um valor discreto para criar blocos separados
 fig_final = px.bar(
-    df_ausente, 
+    df_apenas_ausencia, 
     x="Interval", 
     y="Name", 
     color="Placar",
@@ -123,8 +127,7 @@ fig_final = px.bar(
     title=f"Cronologia de Inatividade - {periodo_sel}"
 )
 
-# 4. PINTANDO O FUNDO (A HISTÓRIA DO JOGO)
-# Adicionamos retângulos coloridos por trás de tudo para mostrar a duração do placar
+# 5. PINTANDO O FUNDO (A HISTÓRIA DO JOGO)
 for i in range(len(status_jogo)):
     min_inicio = status_jogo.iloc[i]['Interval']
     min_fim = status_jogo.iloc[i+1]['Interval'] if i+1 < len(status_jogo) else min_max
@@ -132,11 +135,13 @@ for i in range(len(status_jogo)):
     
     fig_final.add_vrect(
         x0=min_inicio - 0.5, x1=min_fim + 0.5,
-        fillcolor=cor_contexto, opacity=0.15, # Opacidade leve para servir de "palco"
+        fillcolor=cor_contexto, opacity=0.15, 
         layer="below", line_width=0,
     )
 
-# 5. Ajustes de Eixo e Layout
+# 6. AJUSTE DE "SUMIÇO": Forçamos o eixo X a tratar cada minuto como um bloco individual
+fig_final.update_traces(marker_line_width=0, width=0.8) # Largura menor que 1 cria o espaço vazio
+
 fig_final.update_layout(
     height=700,
     xaxis=dict(
@@ -145,7 +150,7 @@ fig_final.update_layout(
         range=[0, min_max + 1]
     ),
     yaxis=dict(title="Atletas", categoryorder='total descending'),
-    bargap=0.4, # Espaço para ver o fundo colorido entre as linhas dos atletas
+    bargap=0.4,
     legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
 )
 
