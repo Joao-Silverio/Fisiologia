@@ -93,26 +93,26 @@ with col_dir:
     st.plotly_chart(fig_heat, use_container_width=True)
 
 # ==========================================
-# 5. TIMELINE REALISTA DE OCIOSIDADE (HISTÓRIA DO JOGO)
+# 5. MAPA DE OCIOSIDADE COM FUNDO TÁTICO (FUSÃO TOTAL)
 # ==========================================
 st.markdown("---")
-st.header("🕵️‍♂️ Mapa de Ociosidade vs. Contexto do Jogo")
-st.markdown("As barras coloridas representam os minutos em que o atleta **não atingiu >19km/h**, pintadas com a cor do placar naquele momento.")
+st.header("🕵️‍♂️ Mapa de Ociosidade sobre a História do Jogo")
+st.markdown("O fundo colorido mostra o **Placar**. As barras sólidas mostram quando o atleta **parou de correr (>19km/h)**.")
 
-# 1. Preparação dos dados de fundo (Placar)
-min_max = int(df_periodo['Interval'].max())
-status_jogo = df_periodo[['Interval', 'Placar']].drop_duplicates().sort_values('Interval')
-
-# 2. Mapa de Cores Padronizado
+# 1. Configuração de Cores (Padronizada)
 mapa_cores_placar = {
     "Ganhando 1": "#2E7D32", "Ganhando 2": "#1B5E20", 
     "Perdendo 1": "#C62828", "Perdendo 2": "#B71C1C", 
     "Empatando": "#F9A825"
 }
 
-# 3. Criar o gráfico base de barras empilhadas (Timeline Real)
-# Usamos apenas os dados onde houve ausência (df_ausente já filtrado por V4 <= 0)
-fig_realista = px.bar(
+# 2. Preparação da Timeline do Jogo (Fundo)
+min_max = int(df_periodo['Interval'].max())
+status_jogo = df_periodo[['Interval', 'Placar']].drop_duplicates().sort_values('Interval')
+
+# 3. Criação do Gráfico de Barras (Inatividade Real)
+# Usamos o df_ausente para desenhar apenas onde NÃO HOUVE ação
+fig_final = px.bar(
     df_ausente, 
     x="Interval", 
     y="Name", 
@@ -120,41 +120,33 @@ fig_realista = px.bar(
     color_discrete_map=mapa_cores_placar,
     orientation='h',
     template='plotly_white',
-    title=f"Linha do Tempo de Inatividade - {periodo_sel}"
+    title=f"Cronologia de Inatividade - {periodo_sel}"
 )
 
-# 4. Adicionar a "História do Jogo" no fundo (Shapes coloridos)
-# Percorremos os blocos de placar para pintar o fundo do gráfico
+# 4. PINTANDO O FUNDO (A HISTÓRIA DO JOGO)
+# Adicionamos retângulos coloridos por trás de tudo para mostrar a duração do placar
 for i in range(len(status_jogo)):
     min_inicio = status_jogo.iloc[i]['Interval']
     min_fim = status_jogo.iloc[i+1]['Interval'] if i+1 < len(status_jogo) else min_max
-    cor_fundo = mapa_cores_placar.get(status_jogo.iloc[i]['Placar'], "#EEEEEE")
+    cor_contexto = mapa_cores_placar.get(status_jogo.iloc[i]['Placar'], "#EEEEEE")
     
-    fig_realista.add_vrect(
+    fig_final.add_vrect(
         x0=min_inicio - 0.5, x1=min_fim + 0.5,
-        fillcolor=cor_fundo, opacity=0.08, # Fundo bem clarinho para não confundir com as barras
+        fillcolor=cor_contexto, opacity=0.15, # Opacidade leve para servir de "palco"
         layer="below", line_width=0,
     )
 
-# 5. Ajustes de Layout para realismo temporal
-fig_realista.update_layout(
-    height=600,
+# 5. Ajustes de Eixo e Layout
+fig_final.update_layout(
+    height=700,
     xaxis=dict(
-        title="Minutos de Jogo (Timeline Real)",
-        tickmode='linear',
-        dtick=5,
+        title="Linha do Tempo Real (Minutos)",
+        tickmode='linear', dtick=5,
         range=[0, min_max + 1]
     ),
     yaxis=dict(title="Atletas", categoryorder='total descending'),
-    showlegend=True,
-    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
-    bargap=0.3 # Dá um espaço entre os atletas para ver os "buracos"
+    bargap=0.4, # Espaço para ver o fundo colorido entre as linhas dos atletas
+    legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
 )
 
-# Formatação do hover para ser direto
-fig_realista.update_traces(hovertemplate='Minuto: %{x}<br>Placar: %{fullData.name}<extra></extra>')
-
-st.plotly_chart(fig_realista, use_container_width=True)
-
-# Insight para o Fisiologista
-st.info("💡 **Como ler este gráfico:** Os blocos coloridos sólidos são os minutos de ociosidade. Se houver um espaço em branco entre dois blocos, significa que o atleta realizou uma ação de V4 naquele minuto. O fundo levemente colorido indica o placar geral da partida.")
+st.plotly_chart(fig_final, use_container_width=True)
