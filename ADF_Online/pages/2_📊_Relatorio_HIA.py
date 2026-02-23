@@ -134,24 +134,55 @@ for periodo in periodos_para_analise:
         todos_minutos = pd.DataFrame({'Interval': range(1, minuto_maximo + 1)})
         df_timeline_full = pd.merge(todos_minutos, df_minutos_components, on='Interval', how='left').fillna(0)
         
-        # 3. Calcula o TOTAL HIA por minuto (para os KPIs e lógica de gap)
+        # 3. Calcula o TOTAL HIA por minuto do ATLETA
         df_timeline_full['Total_HIA_Min'] = df_timeline_full[cols_componentes_hia].sum(axis=1)
         
-        # --- LÓGICA DE KPIs ---
+        # =====================================================================
+        # CÁLCULOS DA EQUIPE (Para o Botão KPI e para a Linha do Gráfico)
+        # =====================================================================
+        df_equipa_periodo = df_base[(df_base['Data'] == jogo_selecionado) & (df_base['Período'] == periodo)].copy()
+        
+        if not df_equipa_periodo.empty:
+            df_equipa_periodo['Total_HIA'] = df_equipa_periodo[cols_componentes_hia].sum(axis=1)
+            
+            # Média TOTAL de HIA por jogador (Para o novo botão)
+            hia_por_jogador = df_equipa_periodo.groupby('Name')['Total_HIA'].sum()
+            hia_por_jogador = hia_por_jogador[hia_por_jogador > 0] # Ignora quem não entrou
+            media_hia_equipe = hia_por_jogador.mean() if not hia_por_jogador.empty else 0
+            
+            # Média por MINUTO (Para a linha tracejada do gráfico)
+            hia_jogador_minuto = df_equipa_periodo.groupby(['Interval', 'Name'])['Total_HIA'].sum().reset_index()
+            media_grupo_minuto = hia_jogador_minuto.groupby('Interval')['Total_HIA'].mean().reset_index()
+        else:
+            media_hia_equipe = 0
+            media_grupo_minuto = pd.DataFrame(columns=['Interval', 'Total_HIA'])
+
+        # --- LÓGICA DE KPIs DO ATLETA ---
         df_timeline_full['Zero_Block'] = (df_timeline_full['Total_HIA_Min'] > 0).cumsum()
         sequencias_zeros = df_timeline_full[df_timeline_full['Total_HIA_Min'] == 0].groupby('Zero_Block').size()
         maior_gap_descanso = sequencias_zeros.max() if not sequencias_zeros.empty else 0
         
         total_hia_periodo = df_timeline_full['Total_HIA_Min'].sum()
         densidade = total_hia_periodo / minuto_maximo if minuto_maximo > 0 else 0
+        
+        # Calcula a porcentagem do Atleta vs a Média da Equipe
+        delta_vs_equipe = ((total_hia_periodo / media_hia_equipe) - 1) * 100 if media_hia_equipe > 0 else 0.0
 
-        k1, k2, k3, k4 = st.columns(4)
+        # =====================================================================
+        # RENDERIZAÇÃO DOS BOTÕES (Agora com 5 colunas)
+        # =====================================================================
+        k1, k2, k3, k4, k5 = st.columns(5)
         k1.metric("HIA Total (Soma)", f"{total_hia_periodo:.0f} ações")
         k2.metric("Minutos Jogados", f"{minuto_maximo} min")
         k3.metric("Densidade (HIA/min)", f"{densidade:.2f}")
         k4.metric("Maior Gap sem HIA", f"{maior_gap_descanso} min seguidos", delta="Recuperação", delta_color="normal")
+        
+        # --- O NOVO BOTÃO DA EQUIPE ---
+        k5.metric("Média da Equipe (HIA)", f"{media_hia_equipe:.0f} ações", delta=f"{delta_vs_equipe:+.1f}% (Atleta vs Equipe)", delta_color="normal")
 
-        # 4. Transformação para formato Longo (Melt)
+        # =====================================================================
+        # GRÁFICO EMPILHADO
+        # =====================================================================
         df_melted = df_timeline_full.melt(
             id_vars=['Interval'], 
             value_vars=cols_componentes_hia,
@@ -160,7 +191,6 @@ for periodo in periodos_para_analise:
         )
         df_melted = df_melted[df_melted['Qtd Ações'] > 0]
 
-        # 5. Gera o Gráfico Empilhado
         fig = px.bar(
             df_melted,
             x='Interval',
@@ -170,30 +200,15 @@ for periodo in periodos_para_analise:
             title=None 
         )
 
-        # =====================================================================
-        # LÓGICA DA LINHA DE MÉDIA DA EQUIPA NO MESMO MINUTO
-        # =====================================================================
-        # Vai buscar todos os jogadores daquele jogo e daquele período
-        df_equipa_periodo = df_base[(df_base['Data'] == jogo_selecionado) & (df_base['Período'] == periodo)].copy()
-        
-        if not df_equipa_periodo.empty:
-            # Soma todas as colunas de HIA para ter o total por registo
-            df_equipa_periodo['Total_HIA'] = df_equipa_periodo[cols_componentes_hia].sum(axis=1)
-            
-            # 1º Agrupa por Minuto e Jogador (para saber quanto cada jogador fez naquele minuto)
-            hia_jogador_minuto = df_equipa_periodo.groupby(['Interval', 'Name'])['Total_HIA'].sum().reset_index()
-            
-            # 2º Calcula a média dessas somas por minuto
-            media_grupo_minuto = hia_jogador_minuto.groupby('Interval')['Total_HIA'].mean().reset_index()
-            
-            # Adiciona a linha ao gráfico
+        # Adiciona a linha pontilhada da Equipe ao gráfico
+        if not media_grupo_minuto.empty:
             fig.add_trace(go.Scatter(
                 x=media_grupo_minuto['Interval'],
                 y=media_grupo_minuto['Total_HIA'],
                 mode='lines',
-                name='Média da Equipa',
-                line=dict(color='#212121', width=2, dash='dot'), # Linha preta/escura pontilhada
-                hovertemplate='Média Equipa: %{y:.1f} ações<extra></extra>'
+                name='Média da Equipe',
+                line=dict(color='#212121', width=2, dash='dot'),
+                hovertemplate='Média Equipe: %{y:.1f} ações<extra></extra>'
             ))
 
         fig.update_layout(
@@ -205,12 +220,11 @@ for periodo in periodos_para_analise:
             xaxis=dict(
                 tickmode='linear', dtick=5, range=[0, minuto_maximo + 1], title="Minuto de Jogo"
             ),
-            yaxis=dict(title="Qtd. Ações HIA (Empilhado)"),
+            yaxis=dict(title="Qtd. Ações HIA"),
             legend=dict(
                 orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=None
             )
         )
-        # Adiciona o total no topo da barra ao passar o rato
         fig.update_traces(hovertemplate='%{y:.0f} ações', selector=dict(type='bar'))
 
         st.plotly_chart(fig, use_container_width=True, key=f"hia_stacked_{periodo}")
