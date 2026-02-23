@@ -5,7 +5,6 @@ import plotly.graph_objs as go
 import os
 import shutil
 import warnings
-import calamine
 
 # =====================================================================
 # 1. CONFIGURAÇÃO DA PÁGINA WEB E AJUSTE DE MARGEM
@@ -44,20 +43,26 @@ def carregar_dados(hora_mod):
     arquivo_temp = 'ADF_TEMP_HIA.xlsb'
     try:
         shutil.copy2(arquivo_original, arquivo_temp)
-        # Adicionamos Acc4 e Dec4 na lista de leitura caso existam
-        colunas_necessarias = [
+        
+        # 1. Lê o Excel inteiro usando o motor ultrarrápido
+        df = pd.read_excel(arquivo_temp, engine='calamine') 
+        
+        # 2. Limpa os espaços em branco nos nomes das colunas
+        df.columns = df.columns.str.strip()
+        
+        # 3. Lista de colunas que nós gostaríamos de ter para o HIA
+        colunas_desejadas = [
             'Data', 'Interval', 'Name', 'Período', 'Adversário',
             'V4 To8 Eff', 'V5 To8 Eff', 'V6 To8 Eff', 
-            'Acc3 Eff', 'Dec3 Eff', 'Acc4 Eff', 'Dec4 Eff', 'Campeonato'
+            'Acc3 Eff', 'Dec3 Eff', 'Acc4 Eff', 'Dec4 Eff', 'Competição'
         ]
-        # Carrega apenas as colunas que realmente existem no arquivo para evitar erro
-        import calamine
-        sheet_cols = pd.read_excel(arquivo_temp, engine='calamine', nrows=0).columns
-        cols_to_use = [c for c in colunas_necessarias if c in sheet_cols]
         
-        df = pd.read_excel(arquivo_temp, engine='calamine', usecols=cols_to_use) 
-        df.columns = df.columns.str.strip()
+        # 4. Filtra e mantém apenas as colunas que REALMENTE existem no seu Excel
+        colunas_existentes = [c for c in colunas_desejadas if c in df.columns]
+        df = df[colunas_existentes]
+        
         return df
+        
     except Exception as e:
         st.error(f"Erro na leitura: {e}")
         return None
@@ -87,7 +92,7 @@ st.markdown("### 🔍 Filtros de Análise")
 
 with st.container():
     
-    lista_campeonatos = sorted(df_completo['Campeonato'].dropna().unique().tolist()) if 'Campeonato' in df_completo.columns else []
+    lista_campeonatos = sorted(df_completo['Competição'].dropna().unique().tolist()) if 'Competição' in df_completo.columns else []
     
     campeonatos_selecionados = st.multiselect(
         "🏆 Campeonatos (Deixe vazio para incluir TODOS):", 
@@ -95,10 +100,10 @@ with st.container():
         default=[] 
     )
     
-    if not campeonatos_selecionados or 'Campeonato' not in df_completo.columns: 
+    if not campeonatos_selecionados or 'Competição' not in df_completo.columns: 
         df_base = df_completo.copy()
     else:
-        df_base = df_completo[df_completo['Campeonato'].isin(campeonatos_selecionados)].copy()
+        df_base = df_completo[df_completo['Competição'].isin(campeonatos_selecionados)].copy()
 
     col1, col2, col3 = st.columns([1.5, 2, 1.5])
     
