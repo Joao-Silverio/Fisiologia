@@ -22,7 +22,7 @@ df_base_total = st.session_state['df_global'].copy()
 
 # Garantindo a ordem ascendente por Data
 df_base_total['Data'] = pd.to_datetime(df_base_total['Data'])
-df_base_total = df_base_total.sort_values(by='Data', ascending=True)
+df_base_total = df_base_total.sort_values(by='Data', ascending=False)
 
 # Criando o display da data após a ordenação
 df_base_total['Data_Display'] = df_base_total['Data'].dt.strftime('%d/%m/%Y') + ' ' + df_base_total['Adversário'].astype(str)
