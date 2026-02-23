@@ -44,7 +44,7 @@ with st.container():
         
     with c3:
         # Alterado de st.radio para st.selectbox para economizar espaço horizontal
-        periodo_sel = st.radio("⏱️ Período:", ["1º Tempo", "2º Tempo"])
+        periodo_sel = st.radio("⏱️ Período:", ["1º Tempo", "2º Tempo"], horizontal = True)
 
     # Lista de atletas disponíveis no jogo
     atletas_jogo = sorted(df_jogo_full['Name'].unique())
