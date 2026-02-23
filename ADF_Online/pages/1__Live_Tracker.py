@@ -53,7 +53,7 @@ def carregar_dados(hora_mod):
         colunas_necessarias = [
             'Data', 'Interval', 'Name', 'Período', 'Placar', 'Adversário',
             'Total Distance', 'V4 Dist', 'V4 To8 Eff', 'V5 To8 Eff', 
-            'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Player Load'
+            'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Player Load', 'Campeonato'
         ]
         df = pd.read_excel(arquivo_temp, engine='calamine', usecols=colunas_necessarias) 
         df.columns = df.columns.str.strip()
@@ -83,11 +83,35 @@ coluna_jogo = 'Data'
 coluna_minuto = 'Interval'
 
 # =====================================================================
-# 3. FILTROS NA TELA PRINCIPAL (LAYOUT HORIZONTAL COMPACTO)
+# 3. FILTROS NA TELA PRINCIPAL (COM FILTRO GLOBAL DE CAMPEONATO)
 # =====================================================================
 st.markdown("### 🔍 Filtros de Análise")
 
 with st.container():
+    
+    # --- O NOVO FILTRO GLOBAL MÚLTIPLO ---
+    lista_campeonatos = sorted(df_completo['Campeonato'].dropna().unique().tolist())
+    
+    # O multiselect cria uma caixa elegante onde os campeonatos viram "tags"
+    campeonatos_selecionados = st.multiselect(
+        "🏆 Campeonatos (Deixe vazio para incluir TODOS):", 
+        options=lista_campeonatos,
+        default=[] # Começa vazio, ou seja, carregando a base inteira por padrão
+    )
+    
+    # A Lógica do "Vazio = Todos":
+    if not campeonatos_selecionados: 
+        df_base = df_completo.copy()
+    else:
+        # A função .isin() permite que o filtro aceite 1, 2 ou 10 campeonatos ao mesmo tempo!
+        df_base = df_completo[df_completo['Campeonato'].isin(campeonatos_selecionados)].copy()
+    
+    # O Pulo do Gato: A partir daqui, o sistema usa o df_base filtrado para alimentar o ML
+    if campeonato_selecionado != "Todos os Campeonatos":
+        df_base = df_completo[df_completo['Campeonato'] == campeonato_selecionado].copy()
+    else:
+        df_base = df_completo.copy()
+
     # Linha 1: 4 Colunas para deixar todos os controles lado a lado
     col1, col2, col3, col4 = st.columns([1.5, 1.5, 1.5, 1.5])
     
@@ -102,17 +126,16 @@ with st.container():
     with col4:
         ordem_graficos = st.radio("Ordem na Tela:", ("1º Tempo no Topo", "2º Tempo no Topo"), horizontal=True)
 
-    # A lógica de quem filtra quem (Jogo e Atleta)
+    # A lógica usando df_base (Garante que só apareçam jogadores e jogos DESTE campeonato)
     if modo_filtro == "Focar no Atleta":
-        lista_atletas = df_completo['Name'].dropna().unique()
+        lista_atletas = df_base['Name'].dropna().unique()
         atletas_ordenados = sorted(lista_atletas)
         
-        # Linha 2 (Fora das colunas): Atletas ocupando a tela toda
-        atleta_selecionado = st.pills("Selecione o Atleta:", atletas_ordenados, default=atletas_ordenados[0])
-        if not atleta_selecionado:
+        atleta_selecionado = st.pills("Selecione o Atleta:", atletas_ordenados, default=atletas_ordenados[0] if len(atletas_ordenados)>0 else None)
+        if not atleta_selecionado and len(atletas_ordenados) > 0:
             atleta_selecionado = atletas_ordenados[0]
         
-        df_filtrado = df_completo[df_completo['Name'] == atleta_selecionado]
+        df_filtrado = df_base[df_base['Name'] == atleta_selecionado]
         jogos_unicos = df_filtrado.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)
         lista_jogos_display = jogos_unicos['Data_Display'].tolist()
         
@@ -120,25 +143,26 @@ with st.container():
             jogo_selecionado_display = st.selectbox("Selecione o Jogo:", lista_jogos_display)
         
     else:
-        jogos_unicos = df_completo.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)
+        jogos_unicos = df_base.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)
         lista_jogos_display = jogos_unicos['Data_Display'].tolist()
         
         with col2:
             jogo_selecionado_display = st.selectbox("Selecione o Jogo:", lista_jogos_display)
         
-        df_filtrado = df_completo[df_completo['Data_Display'] == jogo_selecionado_display]
+        df_filtrado = df_base[df_base['Data_Display'] == jogo_selecionado_display]
         lista_atletas = df_filtrado['Name'].dropna().unique()
         atletas_ordenados = sorted(lista_atletas)
         
-        # Linha 2 (Fora das colunas): Atletas ocupando a tela toda
-        atleta_selecionado = st.pills("Selecione o Atleta:", atletas_ordenados, default=atletas_ordenados[0])
-        if not atleta_selecionado:
+        atleta_selecionado = st.pills("Selecione o Atleta:", atletas_ordenados, default=atletas_ordenados[0] if len(atletas_ordenados)>0 else None)
+        if not atleta_selecionado and len(atletas_ordenados) > 0:
             atleta_selecionado = atletas_ordenados[0]
 
-# (Removido o st.markdown("---") para tirar a linha divisória)
-
-# Recupera a data original escondida
-jogo_selecionado = df_completo[df_completo['Data_Display'] == jogo_selecionado_display]['Data'].iloc[0]
+# Recupera a data original escondida (Com trava de segurança caso o campeonato não tenha jogos)
+if jogo_selecionado_display:
+    jogo_selecionado = df_base[df_base['Data_Display'] == jogo_selecionado_display]['Data'].iloc[0]
+else:
+    st.warning("Nenhum dado encontrado para este campeonato.")
+    st.stop()
 
 # Define as colunas conforme a métrica
 if metrica_selecionada == "Total Distance":
@@ -154,8 +178,8 @@ else:
     coluna_acumulada = 'HIA Acumulada'
     titulo_grafico = f'Projeção de HIA - {atleta_selecionado}'
 
-# Filtra o dataframe base para o atleta escolhido
-df_atleta = df_completo[df_completo['Name'] == atleta_selecionado].copy()
+# Filtra o dataframe base para o atleta escolhido usando o DF protegido!
+df_atleta = df_base[df_base['Name'] == atleta_selecionado].copy()
 
 # =====================================================================
 # 4. MOTOR DE GERAÇÃO DOS GRÁFICOS E ML (1º e 2º TEMPO)
@@ -271,18 +295,21 @@ for periodo in periodos_para_analise:
                 acumulado_pred.append(valor_projetado_atual)
             
             margem_erro = 0.05
-            pred_superior = [val * (1 + margem_erro) for val in acumulado_pred]
-            pred_inferior = [val * (1 - margem_erro) for val in acumulado_pred]
 
-            # KPIs
+            
+            # =====================================================================
+            # KPIs - ACIMA DO GRÁFICO (AGORA COM 6 COLUNAS INTELIGENTES)
+            # =====================================================================
             carga_atual = valor_atual_acumulado
             carga_projetada = acumulado_pred[-1] if len(acumulado_pred) > 0 else carga_atual
             
             minuto_final_proj = minutos_futuros[-1] if len(minutos_futuros) > 0 else minuto_atual
 
+            # 1. Delta vs Própria Média
             delta_alvo_pct = (fator_alvo - 1) * 100 
             delta_pl_pct = (fator_pl - 1) * 100
             
+            # 2. Delta vs Projeção Final
             if minuto_final_proj in curva_media_acumulada_geral.index:
                 media_historica_futura = curva_media_acumulada_geral.loc[minuto_final_proj]
             else:
@@ -291,21 +318,49 @@ for periodo in periodos_para_analise:
             fator_projetado = (carga_projetada / media_historica_futura) if media_historica_futura > 0 else 1.0
             delta_projetado_pct = (fator_projetado - 1) * 100
             
-            def fmt_dist(x): return f"{x:.0f} m" if not np.isnan(x) else "N/A"
+            # =====================================================================
+            # 3. NOVO CÁLCULO: Ritmo Global do Jogo (O Time contra o próprio histórico)
+            # =====================================================================
+            df_time_hoje = df_base[(df_base['Data'] == jogo_atual_nome) & (df_base['Período'] == periodo) & (df_base['Interval'] <= minuto_atual)]
+            df_time_hist = df_base[(df_base['Data'] != jogo_atual_nome) & (df_base['Período'] == periodo) & (df_base['Interval'] <= minuto_atual)]
+
+            # Calcula a média do que a equipe correu hoje (até este minuto)
+            carga_hoje_time = df_time_hoje.groupby('Name')[coluna_distancia].sum().mean() if not df_time_hoje.empty else 0
+            
+            # Calcula a média histórica da equipe (até este mesmo minuto)
+            carga_hist_time = df_time_hist.groupby(['Data', 'Name'])[coluna_distancia].sum().mean() if not df_time_hist.empty else carga_hoje_time
+            
+            # Descobre se o jogo de hoje está mais intenso ou mais lento que o normal
+            delta_time_pct = ((carga_hoje_time / carga_hist_time) - 1) * 100 if carga_hist_time > 0 else 0.0
+            
+            # Isola o desempenho do atleta subtraindo a "inflação" do jogo
+            delta_atleta_vs_time = delta_alvo_pct - delta_time_pct
+
+            # =====================================================================
+            # RENDERIZAÇÃO NA TELA
+            # =====================================================================
+            unidade = "" if metrica_selecionada == "HIA" else " m"
+            def fmt_dist(x): return f"{x:.0f}{unidade}" if not np.isnan(x) else "N/A"
             def fmt_pct(x): return f"{x:+.1f}%" if not np.isnan(x) else "N/A"
 
-            k0, k1, k2, k3, k4 = st.columns(5)
-            
-            k0.metric("Carga Atual", fmt_dist(carga_atual))
-            k1.metric(f"Carga Proj. (min {minuto_final_proj})", fmt_dist(carga_projetada))
+            k0, k1, k2, k3, k4, k5 = st.columns(6)
             
             cor_delta = "normal" if metrica_selecionada in ["V4 Dist", "HIA", "Total Distance"] else "inverse"
             
-            k2.metric(f"Ritmo Atual (min {minuto_atual})", fmt_pct(delta_alvo_pct), delta=fmt_pct(delta_alvo_pct), delta_color=cor_delta)
-            k3.metric(f"Ritmo Previsto (min {minuto_final_proj})", fmt_pct(delta_projetado_pct), delta=fmt_pct(delta_projetado_pct), delta_color=cor_delta)
-            k4.metric(f"Desgaste Sistêmico (PL)", f"{pl_atual_acumulado:.0f}", delta=fmt_pct(delta_pl_pct), delta_color="inverse")
+            k0.metric("Carga Atual", fmt_dist(carga_atual))
+            k1.metric("vs Própria Média", fmt_pct(delta_alvo_pct), delta=fmt_pct(delta_alvo_pct), delta_color=cor_delta)
+            
+            # O NOVO BOTÃO DE CONTEXTO DO JOGO
+            k2.metric("Ritmo Coletivo (Jogo)", fmt_pct(delta_time_pct), delta=f"{fmt_pct(delta_atleta_vs_time)} (Atleta vs Jogo)", delta_color=cor_delta)
+            
+            k3.metric(f"Carga Proj. (min {minuto_final_proj})", fmt_dist(carga_projetada))
+            k4.metric(f"Ritmo Previsto", fmt_pct(delta_projetado_pct), delta=fmt_pct(delta_projetado_pct), delta_color=cor_delta)
+            k5.metric(f"Desgaste Sistêmico (PL)", f"{pl_atual_acumulado:.0f}", delta=fmt_pct(delta_pl_pct), delta_color="inverse")
 
+            # ======================================================================
             # Gráfico Plotly
+            # ======================================================================
+            
             fig = go.Figure()
             jogos_historicos = df_historico[coluna_jogo].unique()
             colors = px.colors.qualitative.Plotly
