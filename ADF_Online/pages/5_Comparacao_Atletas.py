@@ -89,116 +89,114 @@ if df_a1 is None or df_a2 is None:
     st.stop()
 
 # ==========================================
-# 4. PAINEL DE KPIs: O DUELO
+# 4. PAINEL DE KPIs: O DUELO (CARDS LADO A LADO)
 # ==========================================
 st.subheader("📊 Resumo do Confronto (Jogo Completo)")
 
-def kpi_duelo(label, val1, val2, unidade=""):
-    # Função para destacar quem ganhou a métrica
-    cor1 = "green" if val1 > val2 else "red" if val1 < val2 else "gray"
-    cor2 = "green" if val2 > val1 else "red" if val2 < val1 else "gray"
+c1, c2, c3 = st.columns([1, 0.2, 1])
+c1.markdown(f"<h4 style='text-align: right; color: #EF5350; margin-bottom: 0;'>🔴 {atleta_1}</h4><p style='text-align: right; margin-top: 0;'>{df_a1['Minutos Jogados']:.0f} min</p>", unsafe_allow_html=True)
+c2.markdown(f"<h3 style='text-align: center; color: #bdbdbd;'>VS</h3>", unsafe_allow_html=True)
+c3.markdown(f"<h4 style='text-align: left; color: #42A5F5; margin-bottom: 0;'>🔵 {atleta_2}</h4><p style='text-align: left; margin-top: 0;'>{df_a2['Minutos Jogados']:.0f} min</p>", unsafe_allow_html=True)
+
+# Cria 4 colunas para os KPIs ficarem perfeitamente alinhados na horizontal
+col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
+
+def kpi_card(col, label, val1, val2, unidade=""):
+    cor1 = "#2E7D32" if val1 > val2 else "#C62828" if val1 < val2 else "gray" # Verde ganha, Vermelho perde
+    cor2 = "#2E7D32" if val2 > val1 else "#C62828" if val2 < val1 else "gray"
     
-    col_a, col_b, col_c = st.columns([1, 2, 1])
-    with col_b:
-        st.markdown(f"<p style='text-align: center; color: gray; margin-bottom: 0;'>{label}</p>", unsafe_allow_html=True)
-        st.markdown(f"<h3 style='text-align: center; margin-top: 0;'><span style='color: {cor1};'>{val1:.1f}{unidade}</span> <span style='color: white;'>x</span> <span style='color: {cor2};'>{val2:.1f}{unidade}</span></h3>", unsafe_allow_html=True)
+    with col:
+        st.markdown(f"""
+        <div style='background-color: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #e0e0e0; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>
+            <p style='color: #757575; margin-bottom: 8px; font-size: 14px; font-weight: bold;'>{label}</p>
+            <h4 style='margin-top: 0; font-size: 18px;'>
+                <span style='color: {cor1};'>{val1:.1f}{unidade}</span> 
+                <span style='color: #bdbdbd; font-size: 14px; margin: 0 5px;'>x</span> 
+                <span style='color: {cor2};'>{val2:.1f}{unidade}</span>
+            </h4>
+        </div>
+        """, unsafe_allow_html=True)
 
-# Minutos não competem, só informam
-c1, c2, c3 = st.columns(3)
-c1.markdown(f"<h4 style='text-align: center; color: #EF5350;'>🔴 {atleta_1}</h4><p style='text-align: center;'>{df_a1['Minutos Jogados']:.0f} min jogados</p>", unsafe_allow_html=True)
-c2.markdown(f"<h4 style='text-align: center; color: gray;'>VS</h4>", unsafe_allow_html=True)
-c3.markdown(f"<h4 style='text-align: center; color: #42A5F5;'>🔵 {atleta_2}</h4><p style='text-align: center;'>{df_a2['Minutos Jogados']:.0f} min jogados</p>", unsafe_allow_html=True)
-
-st.markdown("---")
-
-kpi_duelo("Distância Total", df_a1.get('Total Distance', 0), df_a2.get('Total Distance', 0), "m")
-kpi_duelo("Ações de Alta Intensidade (HIA)", df_a1.get('HIA_Total', 0), df_a2.get('HIA_Total', 0), "")
-kpi_duelo("Distância em Alta Velocidade (V4)", df_a1.get('V4 Dist', 0), df_a2.get('V4 Dist', 0), "m")
-kpi_duelo("Desgaste Sistêmico (Player Load)", df_a1.get('Player Load', 0), df_a2.get('Player Load', 0), "")
+kpi_card(col_kpi1, "Distância Total", df_a1.get('Total Distance', 0), df_a2.get('Total Distance', 0), "m")
+kpi_card(col_kpi2, "Alta Intensidade (HIA)", df_a1.get('HIA_Total', 0), df_a2.get('HIA_Total', 0), "")
+kpi_card(col_kpi3, "Alta Velocidade (V4)", df_a1.get('V4 Dist', 0), df_a2.get('V4 Dist', 0), "m")
+kpi_card(col_kpi4, "Player Load", df_a1.get('Player Load', 0), df_a2.get('Player Load', 0), "")
 
 # ==========================================
-# 5. GRÁFICO DE RADAR (IMPRESSÃO DIGITAL ATLÉTICA)
+# 5. RADAR E GRÁFICOS DE LINHA (EM ABAS)
 # ==========================================
-st.markdown("---")
-col_radar, col_timeline = st.columns([1, 1.2])
+st.markdown("<br>", unsafe_allow_html=True) # Espaço visual
+col_radar, col_timeline = st.columns([1, 1.4])
 
 with col_radar:
-    st.subheader("🕸️ Perfil Fisiológico (Radar)")
+    st.subheader("🕸️ Perfil Fisiológico")
     
-    # Selecionamos métricas chaves para a "Impressão Digital"
+    # Radar Chart
     metricas_radar = ['Total Distance', 'V4 Dist', 'HIA_Total', 'Player Load']
     metricas_radar = [m for m in metricas_radar if m in df_agrupado.columns]
     
-    # NORMALIZAÇÃO: Descobre o máximo que ALGUÉM fez no time neste jogo para criar a escala 100%
     maximos_time = df_agrupado[metricas_radar].max()
-    
-    # Calcula a % que cada um fez do máximo do time
     val1_norm = (df_a1[metricas_radar] / maximos_time * 100).fillna(0).tolist()
     val2_norm = (df_a2[metricas_radar] / maximos_time * 100).fillna(0).tolist()
     
-    # Fechar o círculo do radar repetindo o primeiro valor no final
     val1_norm += [val1_norm[0]]
     val2_norm += [val2_norm[0]]
     categorias = metricas_radar + [metricas_radar[0]]
     
     fig_radar = go.Figure()
-
-    fig_radar.add_trace(go.Scatterpolar(
-        r=val1_norm, theta=categorias, fill='toself', name=atleta_1,
-        line_color='#EF5350', fillcolor='rgba(239, 83, 80, 0.4)'
-    ))
-    
-    fig_radar.add_trace(go.Scatterpolar(
-        r=val2_norm, theta=categorias, fill='toself', name=atleta_2,
-        line_color='#42A5F5', fillcolor='rgba(66, 165, 245, 0.4)'
-    ))
+    fig_radar.add_trace(go.Scatterpolar(r=val1_norm, theta=categorias, fill='toself', name=atleta_1, line_color='#EF5350', fillcolor='rgba(239, 83, 80, 0.4)'))
+    fig_radar.add_trace(go.Scatterpolar(r=val2_norm, theta=categorias, fill='toself', name=atleta_2, line_color='#42A5F5', fillcolor='rgba(66, 165, 245, 0.4)'))
 
     fig_radar.update_layout(
-        polar=dict(
-            radialaxis=dict(visible=True, range=[0, 100], ticksuffix="%")
-        ),
-        showlegend=True,
-        template='plotly_white',
+        polar=dict(radialaxis=dict(visible=True, range=[0, 100], ticksuffix="%")),
+        showlegend=True, template='plotly_white',
         legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
-        height=450, margin=dict(t=40, b=40, l=40, r=40)
+        height=450, margin=dict(t=30, b=40, l=40, r=40)
     )
-    
     st.plotly_chart(fig_radar, use_container_width=True)
-    st.info("💡 **Como ler o Radar:** A borda externa (100%) representa o atleta da equipe que mais pontuou naquela métrica neste jogo. Quanto mais cheia a teia, mais dominante o atleta foi no contexto do elenco.")
 
-# ==========================================
-# 6. TIMELINE COMPARATIVA (ACUMULADO)
-# ==========================================
 with col_timeline:
-    st.subheader("📈 Corrida de Ritmo: V4 Acumulada")
+    st.subheader("📈 Corrida de Ritmo (Timeline)")
     
-    # Filtramos minuto a minuto apenas para os dois
-    df_min_a1 = df_jogo[df_jogo['Name'] == atleta_1].sort_values('Interval')
-    df_min_a2 = df_jogo[df_jogo['Name'] == atleta_2].sort_values('Interval')
+    # --- Preparação de Dados para as Linhas Acumuladas ---
+    df_min_a1 = df_jogo[df_jogo['Name'] == atleta_1].sort_values('Interval').copy()
+    df_min_a2 = df_jogo[df_jogo['Name'] == atleta_2].sort_values('Interval').copy()
     
-    # Calculamos a soma acumulada
-    df_min_a1['V4_Acumulada'] = df_min_a1.get('V4 Dist', pd.Series(0)).cumsum()
-    df_min_a2['V4_Acumulada'] = df_min_a2.get('V4 Dist', pd.Series(0)).cumsum()
+    # V4 Acumulada
+    df_min_a1['V4_Acum'] = df_min_a1.get('V4 Dist', pd.Series(0)).cumsum()
+    df_min_a2['V4_Acum'] = df_min_a2.get('V4 Dist', pd.Series(0)).cumsum()
     
-    fig_line = go.Figure()
+    # Sprints Acumulados (V5) - Busca 'V5 Dist', se não achar, usa 'V5 To8 Eff'
+    col_sprint = 'V5 Dist' if 'V5 Dist' in df_jogo.columns else 'V5 To8 Eff'
+    df_min_a1['V5_Acum'] = df_min_a1.get(col_sprint, pd.Series(0)).cumsum()
+    df_min_a2['V5_Acum'] = df_min_a2.get(col_sprint, pd.Series(0)).cumsum()
     
-    fig_line.add_trace(go.Scatter(
-        x=df_min_a1['Interval'], y=df_min_a1['V4_Acumulada'],
-        mode='lines', name=atleta_1, line=dict(color='#EF5350', width=3)
-    ))
+    # Força (Acc3 + Dec3) Acumulada
+    df_min_a1['AccDec'] = df_min_a1.get('Acc3 Eff', pd.Series(0)) + df_min_a1.get('Dec3 Eff', pd.Series(0))
+    df_min_a2['AccDec'] = df_min_a2.get('Acc3 Eff', pd.Series(0)) + df_min_a2.get('Dec3 Eff', pd.Series(0))
+    df_min_a1['AccDec_Acum'] = df_min_a1['AccDec'].cumsum()
+    df_min_a2['AccDec_Acum'] = df_min_a2['AccDec'].cumsum()
+
+    # --- Criação das Abas (Tabs) ---
+    tab1, tab2, tab3 = st.tabs(["⚡ V4 Acumulada", "🚀 Sprints (V5)", "🛑 Força (Acc3 + Dec3)"])
     
-    fig_line.add_trace(go.Scatter(
-        x=df_min_a2['Interval'], y=df_min_a2['V4_Acumulada'],
-        mode='lines', name=atleta_2, line=dict(color='#42A5F5', width=3)
-    ))
-    
-    fig_line.update_layout(
-        template='plotly_white',
-        height=450,
-        xaxis_title="Minuto de Jogo",
-        yaxis_title="V4 Distância Acumulada (m)",
-        hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
-    )
-    
-    st.plotly_chart(fig_line, use_container_width=True)
+    def desenhar_grafico_linha(df1, df2, coluna_y, titulo_y):
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df1['Interval'], y=df1[coluna_y], mode='lines', name=atleta_1, line=dict(color='#EF5350', width=3)))
+        fig.add_trace(go.Scatter(x=df2['Interval'], y=df2[coluna_y], mode='lines', name=atleta_2, line=dict(color='#42A5F5', width=3)))
+        fig.update_layout(
+            template='plotly_white', height=380,
+            xaxis_title="Minuto de Jogo", yaxis_title=titulo_y,
+            hovermode="x unified", margin=dict(t=10, b=10, l=10, r=10),
+            legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5)
+        )
+        return fig
+
+    with tab1:
+        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V4_Acum', 'Volume de V4 (m)'), use_container_width=True)
+        
+    with tab2:
+        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V5_Acum', f'Volume de Sprint ({col_sprint})'), use_container_width=True)
+        
+    with tab3:
+        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'AccDec_Acum', 'Ações de Acc/Dec'), use_container_width=True)
