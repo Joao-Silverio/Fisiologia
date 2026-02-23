@@ -26,12 +26,13 @@ df_base = st.session_state['df_global'].copy()
 df_base['Data_Display'] = pd.to_datetime(df_base['Data']).dt.strftime('%d/%m/%Y') + ' ' + df_base['Adversário'].astype(str)
 
 # ==========================================
-# 2. FILTROS DE COMPARAÇÃO
+# 2. FILTROS DE COMPARAÇÃO (TUDO EM UMA LINHA)
 # ==========================================
 st.markdown("### 🔍 Configuração do Duelo")
 
 with st.container():
-    c1, c2, c3, c4 = st.columns([1.5, 2, 1.5, 1.5])
+    # 5 colunas em uma única linha. O Jogo (c2) recebe um pouco mais de espaço porque o nome é maior.
+    c1, c2, c3, c4, c5 = st.columns([1.2, 1.8, 1, 1.2, 1.2])
     
     with c1:
         competicao_sel = st.multiselect("🏆 Competição:", options=df_base['Competição'].unique().tolist() if 'Competição' in df_base.columns else [])
@@ -39,16 +40,19 @@ with st.container():
 
     with c2:
         jogo_sel = st.selectbox("📅 Selecione o Jogo:", df_f1['Data_Display'].unique())
-        df_jogo = df_f1[df_f1['Data_Display'] == jogo_sel]
+        df_jogo_full = df_f1[df_f1['Data_Display'] == jogo_sel]
+        
+    with c3:
+        # Alterado de st.radio para st.selectbox para economizar espaço horizontal
+        periodo_sel = st.radio("⏱️ Período:", ["Jogo Completo", "1º Tempo", "2º Tempo"])
 
     # Lista de atletas disponíveis no jogo
-    atletas_jogo = sorted(df_jogo['Name'].unique())
+    atletas_jogo = sorted(df_jogo_full['Name'].unique())
 
-    with c3:
+    with c4:
         atleta_1 = st.selectbox("🔴 Atleta 1 (Referência):", atletas_jogo, index=0)
         
-    with c4:
-        # Garante que o atleta 2 seja diferente por padrão, se possível
+    with c5:
         index_a2 = 1 if len(atletas_jogo) > 1 else 0
         atleta_2 = st.selectbox("🔵 Atleta 2 (Desafiante):", atletas_jogo, index=index_a2)
 
@@ -58,6 +62,17 @@ if atleta_1 == atleta_2:
     st.warning("⚠️ Selecione dois atletas diferentes para a comparação.")
     st.stop()
 
+# Aplicação do Filtro de Período
+if periodo_sel == "1º Tempo":
+    df_jogo = df_jogo_full[df_jogo_full['Período'] == 1].copy()
+elif periodo_sel == "2º Tempo":
+    df_jogo = df_jogo_full[df_jogo_full['Período'] == 2].copy()
+else:
+    df_jogo = df_jogo_full.copy()
+
+if df_jogo.empty:
+    st.warning(f"⚠️ Não há dados disponíveis para {periodo_sel} neste jogo.")
+    st.stop()
 # ==========================================
 # 3. PREPARAÇÃO DOS DADOS (AGRUPAMENTO DO JOGO)
 # ==========================================
