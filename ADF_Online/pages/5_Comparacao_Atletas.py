@@ -62,7 +62,8 @@ if atleta_1 == atleta_2:
 # 3. PREPARAÇÃO DOS DADOS (AGRUPAMENTO DO JOGO)
 # ==========================================
 # Precisamos somar as métricas de volume para o jogo inteiro
-cols_volume = ['Total Distance', 'V4 Dist', 'Player Load']
+# Adicionado 'V5 Dist' para pegar a distância em Sprint
+cols_volume = ['Total Distance', 'V4 Dist', 'V5 Dist', 'Player Load']
 # Adicionando HIA e suas quebras (com segurança caso faltem colunas)
 cols_hia = ['V4 To8 Eff', 'V5 To8 Eff', 'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Acc4 Eff', 'Dec4 Eff']
 cols_existentes = [c for c in cols_volume + cols_hia if c in df_jogo.columns]
@@ -92,7 +93,7 @@ if df_a1 is None or df_a2 is None:
     st.stop()
 
 # ==========================================
-# 4. PAINEL DE KPIs: O DUELO (CARDS LADO A LADO)
+# 4. PAINEL DE KPIs: O DUELO (6 CARDS LADO A LADO)
 # ==========================================
 st.subheader("📊 Resumo do Confronto (Jogo Completo)")
 
@@ -101,20 +102,21 @@ c1.markdown(f"<h4 style='text-align: right; color: #EF5350; margin-bottom: 0;'>�
 c2.markdown(f"<h3 style='text-align: center; color: #bdbdbd;'>VS</h3>", unsafe_allow_html=True)
 c3.markdown(f"<h4 style='text-align: left; color: #42A5F5; margin-bottom: 0;'>🔵 {atleta_2}</h4><p style='text-align: left; margin-top: 0;'>{df_a2['Minutos Jogados']:.0f} min</p>", unsafe_allow_html=True)
 
-# Agora com 5 colunas para acomodar a nova métrica Acc/Dec
-col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5 = st.columns(5)
+# Agora com 6 colunas para acomodar a métrica de Sprint (V5)
+col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5, col_kpi6 = st.columns(6)
 
 def kpi_card(col, label, val1, val2, unidade=""):
     cor1 = "#2E7D32" if val1 > val2 else "#C62828" if val1 < val2 else "gray" # Verde ganha, Vermelho perde
     cor2 = "#2E7D32" if val2 > val1 else "#C62828" if val2 < val1 else "gray"
     
     with col:
+        # Fonte levemente reduzida (16px e 13px) para os 6 cards caberem na mesma linha perfeitamente
         st.markdown(f"""
-        <div style='background-color: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center; border: 1px solid #e0e0e0; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>
-            <p style='color: #757575; margin-bottom: 8px; font-size: 14px; font-weight: bold;'>{label}</p>
-            <h4 style='margin-top: 0; font-size: 17px;'>
+        <div style='background-color: #f8f9fa; padding: 12px; border-radius: 10px; text-align: center; border: 1px solid #e0e0e0; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>
+            <p style='color: #757575; margin-bottom: 5px; font-size: 13px; font-weight: bold;'>{label}</p>
+            <h4 style='margin-top: 0; font-size: 16px;'>
                 <span style='color: {cor1};'>{val1:.0f}{unidade}</span> 
-                <span style='color: #bdbdbd; font-size: 14px; margin: 0 3px;'>x</span> 
+                <span style='color: #bdbdbd; font-size: 13px; margin: 0 2px;'>x</span> 
                 <span style='color: {cor2};'>{val2:.0f}{unidade}</span>
             </h4>
         </div>
@@ -123,8 +125,10 @@ def kpi_card(col, label, val1, val2, unidade=""):
 kpi_card(col_kpi1, "Distância Total", df_a1.get('Total Distance', 0), df_a2.get('Total Distance', 0), "m")
 kpi_card(col_kpi2, "HIA (Total)", df_a1.get('HIA_Total', 0), df_a2.get('HIA_Total', 0), "")
 kpi_card(col_kpi3, "V4 Distância", df_a1.get('V4 Dist', 0), df_a2.get('V4 Dist', 0), "m")
-kpi_card(col_kpi4, "Força (Acc/Dec)", df_a1.get('AccDec_Total', 0), df_a2.get('AccDec_Total', 0), "")
-kpi_card(col_kpi5, "Player Load", df_a1.get('Player Load', 0), df_a2.get('Player Load', 0), "")
+# Novo Card: Sprint V5
+kpi_card(col_kpi4, "Sprint (V5)", df_a1.get('V5 Dist', 0), df_a2.get('V5 Dist', 0), "m")
+kpi_card(col_kpi5, "Força (Acc/Dec)", df_a1.get('AccDec_Total', 0), df_a2.get('AccDec_Total', 0), "")
+kpi_card(col_kpi6, "Player Load", df_a1.get('Player Load', 0), df_a2.get('Player Load', 0), "")
 
 # ==========================================
 # 5. RADAR E GRÁFICOS DE LINHA (EM ABAS)
@@ -135,20 +139,26 @@ col_radar, col_timeline = st.columns([1, 1.4])
 with col_radar:
     st.subheader("🕸️ Perfil Fisiológico")
     
-    # Radar Chart - Adicionando AccDec_Total na lista
-    metricas_radar = ['Total Distance', 'V4 Dist', 'HIA_Total', 'AccDec_Total', 'Player Load']
+    # Radar Chart - Adicionando V5 Dist e garantindo fallback caso a coluna se chame diferente
+    metricas_radar = ['Total Distance', 'V4 Dist', 'V5 Dist', 'HIA_Total', 'AccDec_Total', 'Player Load']
+    # Mantém apenas as que realmente existem no df
     metricas_radar = [m for m in metricas_radar if m in df_agrupado.columns]
     
     # Dicionário para deixar os nomes bonitos no gráfico
     nomes_bonitos = {
         'Total Distance': 'Distância',
-        'V4 Dist': 'Velocidade V4',
+        'V4 Dist': 'Veloc. V4',
+        'V5 Dist': 'Sprint V5',
         'HIA_Total': 'HIA Total',
-        'AccDec_Total': 'Força Acc/Dec',
-        'Player Load': 'Player Load'
+        'AccDec_Total': 'Acc/Dec',
+        'Player Load': 'Load'
     }
     
     maximos_time = df_agrupado[metricas_radar].max()
+    
+    # Prevenção contra divisão por zero se o máximo do time for 0
+    maximos_time = maximos_time.replace(0, 1) 
+
     val1_norm = (df_a1[metricas_radar] / maximos_time * 100).fillna(0).tolist()
     val2_norm = (df_a2[metricas_radar] / maximos_time * 100).fillna(0).tolist()
     
@@ -156,7 +166,7 @@ with col_radar:
     val1_norm += [val1_norm[0]]
     val2_norm += [val2_norm[0]]
     
-    # Aplicar os nomes bonitos no eixo do radar
+    # Aplicar os nomes curtos e bonitos no eixo do radar
     categorias_labels = [nomes_bonitos.get(m, m) for m in metricas_radar]
     categorias_labels += [categorias_labels[0]]
     
