@@ -93,69 +93,68 @@ with col_dir:
     st.plotly_chart(fig_heat, use_container_width=True)
 
 # ==========================================
-# 5. ANÁLISE TÁTICA CONSOLIDADA (HISTÓRIA DO JOGO)
+# 5. TIMELINE REALISTA DE OCIOSIDADE (HISTÓRIA DO JOGO)
 # ==========================================
 st.markdown("---")
-st.header("📖 Contexto Tático e Cronologia dos Apagões")
+st.header("🕵️‍♂️ Mapa de Ociosidade vs. Contexto do Jogo")
+st.markdown("As barras coloridas representam os minutos em que o atleta **não atingiu >19km/h**, pintadas com a cor do placar naquele momento.")
 
-# Mapeamento de cores expandido para cobrir todas as variações do seu Placar
+# 1. Preparação dos dados de fundo (Placar)
+min_max = int(df_periodo['Interval'].max())
+status_jogo = df_periodo[['Interval', 'Placar']].drop_duplicates().sort_values('Interval')
+
+# 2. Mapa de Cores Padronizado
 mapa_cores_placar = {
     "Ganhando 1": "#2E7D32", "Ganhando 2": "#1B5E20", 
     "Perdendo 1": "#C62828", "Perdendo 2": "#B71C1C", 
     "Empatando": "#F9A825"
 }
 
-# Layout em colunas: Volume à esquerda e Timeline à direita
-col_vol, col_time = st.columns([1, 1.2])
+# 3. Criar o gráfico base de barras empilhadas (Timeline Real)
+# Usamos apenas os dados onde houve ausência (df_ausente já filtrado por V4 <= 0)
+fig_realista = px.bar(
+    df_ausente, 
+    x="Interval", 
+    y="Name", 
+    color="Placar",
+    color_discrete_map=mapa_cores_placar,
+    orientation='h',
+    template='plotly_white',
+    title=f"Linha do Tempo de Inatividade - {periodo_sel}"
+)
 
-with col_vol:
-    st.subheader("Em que situação o atleta 'apaga' mais?")
-    df_tatica = df_ausente.groupby(['Name', 'Placar']).size().reset_index(name='Minutos')
+# 4. Adicionar a "História do Jogo" no fundo (Shapes coloridos)
+# Percorremos os blocos de placar para pintar o fundo do gráfico
+for i in range(len(status_jogo)):
+    min_inicio = status_jogo.iloc[i]['Interval']
+    min_fim = status_jogo.iloc[i+1]['Interval'] if i+1 < len(status_jogo) else min_max
+    cor_fundo = mapa_cores_placar.get(status_jogo.iloc[i]['Placar'], "#EEEEEE")
     
-    fig_vol = px.bar(df_tatica, y="Name", x="Minutos", color="Placar",
-                    color_discrete_map=mapa_cores_placar,
-                    template='plotly_white', orientation='h')
-    
-    fig_vol.update_layout(barmode='stack', yaxis={'categoryorder':'total ascending'}, 
-                         height=500, showlegend=False) # Legend oculta para não repetir
-    st.plotly_chart(fig_vol, use_container_width=True)
-
-with col_time:
-    st.subheader("Timeline: Performance vs. Placar")
-    atleta_foco = st.selectbox("Selecione um Atleta para análise detalhada:", df_periodo['Name'].unique())
-    
-    # Preparação da Timeline do Placar
-    min_max = int(df_periodo['Interval'].max())
-    timeline_game = pd.DataFrame({'Interval': range(1, min_max + 1)})
-    
-    # Pegamos o placar minuto a minuto do jogo
-    status_jogo = df_periodo[['Interval', 'Placar']].drop_duplicates().sort_values('Interval')
-    timeline_game = pd.merge(timeline_game, status_jogo, on='Interval', how='left').ffill()
-
-    # Gráfico de Área para o fundo colorido (A História do Jogo)
-    fig_historia = px.area(timeline_game, x="Interval", y=[1]*len(timeline_game), color="Placar",
-                           color_discrete_map=mapa_cores_placar,
-                           template='plotly_white')
-
-    # Adicionamos os "X" pretos (Apagões) do atleta selecionado
-    df_atleta_ausente = df_periodo[(df_periodo['Name'] == atleta_foco) & (df_periodo[col_v4] <= 0)]
-    
-    fig_historia.add_trace(go.Scatter(
-        x=df_atleta_ausente['Interval'], 
-        y=[0.5]*len(df_atleta_ausente),
-        mode='markers',
-        name='Apagão (V4 <= 0)',
-        marker=dict(color='black', symbol='x', size=10, line=dict(width=1)),
-        hovertemplate='Apagão no Minuto %{x}<extra></extra>'
-    ))
-
-    fig_historia.update_layout(
-        height=400, 
-        yaxis={'visible': False},
-        xaxis_title="Minutos de Jogo",
-        legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5)
+    fig_realista.add_vrect(
+        x0=min_inicio - 0.5, x1=min_fim + 0.5,
+        fillcolor=cor_fundo, opacity=0.08, # Fundo bem clarinho para não confundir com as barras
+        layer="below", line_width=0,
     )
-    st.plotly_chart(fig_historia, use_container_width=True)
 
-# Alerta de Insight Fisiológico
-st.info(f"💡 **Dica de Análise:** Se os 'X' pretos do **{atleta_foco}** surgem concentrados no final de um bloco de cor (ex: final do período perdendo), isso indica fadiga física acumulada. Se surgem logo após uma mudança de placar, pode ser um abalo anímico/tático.")
+# 5. Ajustes de Layout para realismo temporal
+fig_realista.update_layout(
+    height=600,
+    xaxis=dict(
+        title="Minutos de Jogo (Timeline Real)",
+        tickmode='linear',
+        dtick=5,
+        range=[0, min_max + 1]
+    ),
+    yaxis=dict(title="Atletas", categoryorder='total descending'),
+    showlegend=True,
+    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+    bargap=0.3 # Dá um espaço entre os atletas para ver os "buracos"
+)
+
+# Formatação do hover para ser direto
+fig_realista.update_traces(hovertemplate='Minuto: %{x}<br>Placar: %{fullData.name}<extra></extra>')
+
+st.plotly_chart(fig_realista, use_container_width=True)
+
+# Insight para o Fisiologista
+st.info("💡 **Como ler este gráfico:** Os blocos coloridos sólidos são os minutos de ociosidade. Se houver um espaço em branco entre dois blocos, significa que o atleta realizou uma ação de V4 naquele minuto. O fundo levemente colorido indica o placar geral da partida.")
