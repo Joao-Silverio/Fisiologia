@@ -19,7 +19,11 @@ def obter_hora_modificacao(caminho_ficheiro):
     except FileNotFoundError:
         return 0
 
-arquivo_original = 'ADF OnLine 2024.xlsb'
+# Descobre exatamente em qual pasta o código está rodando no servidor
+DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
+
+# Cola o nome do arquivo na frente da pasta
+arquivo_original = os.path.join(DIRETORIO_ATUAL, 'ADF OnLine 2024.xlsb')
 hora_atualizacao = obter_hora_modificacao(arquivo_original)
 
 # 1. Função Global de Carregamento Turbo
