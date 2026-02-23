@@ -52,13 +52,14 @@ def obter_hora_modificacao(caminho_ficheiro):
     except FileNotFoundError:
         return 0
 
-
-# Descobre exatamente em qual pasta o código está rodando no servidor
+# 1. Descobre onde este arquivo (.py) está rodando (ele vai achar a pasta "pages")
 DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
 
-# Cola o nome do arquivo na frente da pasta
-arquivo_original = os.path.join(DIRETORIO_ATUAL, 'ADF OnLine 2024.xlsb')
-hora_atualizacao = obter_hora_modificacao(arquivo_original)
+# 2. Dá um passo para trás, saindo da pasta "pages" e voltando para a raiz do projeto
+DIRETORIO_RAIZ = os.path.dirname(DIRETORIO_ATUAL)
+
+# 3. Junta o caminho da raiz com o nome do seu Excel
+arquivo_original = os.path.join(DIRETORIO_RAIZ, 'ADF OnLine 2024.xlsb')
 
 
 @st.cache_resource(show_spinner=False)
