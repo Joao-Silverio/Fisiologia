@@ -41,7 +41,7 @@ def load_global_data(hora_mod):
             'Data', 'Interval', 'Name', 'Período', 'Placar', 'Resultado', 'Adversário',
             'Total Distance', 'V4 Dist', 'V4 To8 Eff', 'V5 To8 Eff', 
             'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Player Load',
-            'Parte (15 min)', 'Parte (5 min)', 'Parte (3 min)'
+            'Parte (15 min)', 'Parte (5 min)', 'Parte (3 min)', 'Competição'
         ]
         
         # Lemos o Excel com o motor 'calamine'. 
