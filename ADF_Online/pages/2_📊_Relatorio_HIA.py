@@ -170,6 +170,32 @@ for periodo in periodos_para_analise:
             title=None 
         )
 
+        # =====================================================================
+        # LÓGICA DA LINHA DE MÉDIA DA EQUIPA NO MESMO MINUTO
+        # =====================================================================
+        # Vai buscar todos os jogadores daquele jogo e daquele período
+        df_equipa_periodo = df_base[(df_base['Data'] == jogo_selecionado) & (df_base['Período'] == periodo)].copy()
+        
+        if not df_equipa_periodo.empty:
+            # Soma todas as colunas de HIA para ter o total por registo
+            df_equipa_periodo['Total_HIA'] = df_equipa_periodo[cols_componentes_hia].sum(axis=1)
+            
+            # 1º Agrupa por Minuto e Jogador (para saber quanto cada jogador fez naquele minuto)
+            hia_jogador_minuto = df_equipa_periodo.groupby(['Interval', 'Name'])['Total_HIA'].sum().reset_index()
+            
+            # 2º Calcula a média dessas somas por minuto
+            media_grupo_minuto = hia_jogador_minuto.groupby('Interval')['Total_HIA'].mean().reset_index()
+            
+            # Adiciona a linha ao gráfico
+            fig.add_trace(go.Scatter(
+                x=media_grupo_minuto['Interval'],
+                y=media_grupo_minuto['Total_HIA'],
+                mode='lines',
+                name='Média da Equipa',
+                line=dict(color='#212121', width=2, dash='dot'), # Linha preta/escura pontilhada
+                hovertemplate='Média Equipa: %{y:.1f} ações<extra></extra>'
+            ))
+
         fig.update_layout(
             template='plotly_white',
             height=350,
@@ -184,7 +210,8 @@ for periodo in periodos_para_analise:
                 orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=None
             )
         )
-        fig.update_traces(hovertemplate='%{y:.0f} ações')
+        # Adiciona o total no topo da barra ao passar o rato
+        fig.update_traces(hovertemplate='%{y:.0f} ações', selector=dict(type='bar'))
 
         st.plotly_chart(fig, use_container_width=True, key=f"hia_stacked_{periodo}")
         
