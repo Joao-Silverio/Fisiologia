@@ -20,9 +20,9 @@ if 'df_global' not in st.session_state:
     
 df_base_total = st.session_state['df_global'].copy()
 
-# Garantindo a ordem ascendente por Data
+# Garantindo a ordem ASCENDENTE por Data (Cronológica)
 df_base_total['Data'] = pd.to_datetime(df_base_total['Data'])
-df_base_total = df_base_total.sort_values(by='Data', ascending=False)
+df_base_total = df_base_total.sort_values(by='Data', ascending=True)
 
 # Criando o display da data após a ordenação
 df_base_total['Data_Display'] = df_base_total['Data'].dt.strftime('%d/%m/%Y') + ' ' + df_base_total['Adversário'].astype(str)
@@ -39,7 +39,6 @@ with st.container():
         df_base = df_base_total[df_base_total['Competição'].isin(competicao_sel)] if competicao_sel else df_base_total.copy()
 
     with c2:
-        # A lista de jogos aqui já seguirá a ordem ascendente definida no df_base
         opcoes_jogos = df_base['Data_Display'].unique().tolist()
         jogo_sel = st.selectbox("📅 Selecione o Jogo:", opcoes_jogos)
         df_jogo = df_base[df_base['Data_Display'] == jogo_sel]
@@ -57,65 +56,68 @@ with st.container():
 st.markdown("---")
 
 # ==========================================
-# 3. LÓGICA DE ALERTAS (FOCO EM V4 DIST)
+# 3. LÓGICA DE ALERTAS E TRATAMENTO (V4 DIST)
 # ==========================================
 col_v4 = 'V4 Dist'
 df_periodo = df_periodo.dropna(subset=[coluna_faixa])
 
-# Alerta: Jogadores com mais de 8 minutos sem qualquer ação em V4 no tempo selecionado
-df_ausente = df_periodo[df_periodo[col_v4] <= 0]
+# Alerta: Jogadores com mais de 8 minutos sem qualquer ação em V4
+df_ausente = df_periodo[df_periodo[col_v4] <= 0].copy()
 contagem_critica = df_ausente.groupby('Name').size()
-# Threshold de 8 minutos para um alerta mais sensível em V4
 atletas_em_alerta = contagem_critica[contagem_critica > 8].index.tolist()
 
 if atletas_em_alerta:
     st.error(f"⚠️ **ALERTA DE INTENSIDADE (V4):** Atletas com longo tempo sem estímulo de Alta Velocidade: {', '.join(atletas_em_alerta)}")
 
 # ==========================================
-# 4. GRÁFICOS
+# 4. GRÁFICOS LADO A LADO
 # ==========================================
 col_esq, col_dir = st.columns([1, 1])
 
 with col_esq:
     st.subheader("Minutos Acumulados em 'Apagão' (V4)")
     df_contagem = df_ausente.groupby(['Name', coluna_faixa]).size().reset_index(name='Minutos_Ausentes')
-    
     fig_rank = px.bar(df_contagem, y="Name", x="Minutos_Ausentes", color=coluna_faixa,
                      orientation='h', template='plotly_white',
                      color_discrete_sequence=px.colors.qualitative.Safe)
-    
-    fig_rank.update_layout(barmode='stack', yaxis={'categoryorder':'total ascending'}, height=500)
+    fig_rank.update_layout(barmode='stack', yaxis={'categoryorder':'total ascending'}, height=450)
     st.plotly_chart(fig_rank, use_container_width=True)
 
 with col_dir:
     st.subheader("Densidade de Alta Velocidade (V4)")
     df_heatmap = df_periodo.groupby(['Interval', 'Name'])[col_v4].sum().reset_index()
-    
     fig_heat = px.density_heatmap(df_heatmap, x="Interval", y="Name", z=col_v4,
                                  color_continuous_scale="Viridis", template='plotly_white',
                                  labels={'Interval': 'Minuto do Jogo', col_v4: 'Metros em V4'})
-    
-    fig_heat.update_layout(height=500)
+    fig_heat.update_layout(height=450)
     st.plotly_chart(fig_heat, use_container_width=True)
 
 # ==========================================
-# ANALISE TATICA
+# 5. ANÁLISE TÁTICA (FADIGA POR CONTEXTO)
 # ==========================================
+st.markdown("---")
+st.subheader("📌 Contexto Tático dos Apagões")
 
-# Criar coluna de status do placar (exemplo baseado na sua lógica de ML)
-def verificar_status(row):
-    if 'Ganhando 1' in row and row['Ganhando 1'] == 1: return "Ganhando"
-    if 'Perdendo 1' in row and row['Perdendo 1'] == 1: return "Perdendo"
-    return "Empatando"
+# Mapeamento de cores baseado no texto da coluna 'Placar'
+mapa_cores_placar = {
+    "Ganhando 1": "#2E7D32", # Verde
+    "Perdendo 1": "#C62828", # Vermelho
+    "Empatando": "#F9A825"   # Amarelo/Laranja
+}
 
-df_ausente['Status_Placar'] = df_ausente.apply(verificar_status, axis=1)
+# Novo Gráfico de Ranking cruzando Atleta com o Placar do momento do apagão
+df_tatica = df_ausente.groupby(['Name', 'Placar']).size().reset_index(name='Minutos')
 
-# Novo Gráfico de Ranking com Contexto Tático
-fig_rank = px.bar(df_ausente.groupby(['Name', 'Status_Placar']).size().reset_index(name='Minutos'), 
-                 y="Name", x="Minutos", color="Status_Placar",
-                 title="Minutos de 'Apagão' por Status do Placar",
-                 color_discrete_map={"Ganhando": "#2E7D32", "Perdendo": "#C62828", "Empatando": "#F9A825"},
-                 template='plotly_white', orientation='h')
+fig_tatica = px.bar(df_tatica, 
+                  y="Name", x="Minutos", color="Placar",
+                  title="Em que situação o atleta 'apaga' mais?",
+                  color_discrete_map=mapa_cores_placar,
+                  template='plotly_white', orientation='h')
 
-fig_rank.update_layout(barmode='stack', yaxis={'categoryorder':'total ascending'})
-st.plotly_chart(fig_rank, use_container_width=True)
+fig_tatica.update_layout(
+    barmode='stack', 
+    yaxis={'categoryorder':'total ascending'},
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+)
+
+st.plotly_chart(fig_tatica, use_container_width=True)
