@@ -80,7 +80,7 @@ st.markdown("### 🔍 Filtros de Análise")
 with st.container():
     
     # Linha 1: Modo de Busca e Seleção da Métrica (Lado a Lado)
-    col_modo, col_metrica = st.columns 2)
+    col_modo, col_metrica = st.columns 2
     
     with col_modo:
         modo_filtro = st.radio("Prioridade da Busca:", ("Focar no Atleta", "Focar no Jogo"), horizontal=True)
