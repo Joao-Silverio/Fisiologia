@@ -93,64 +93,69 @@ with col_dir:
     st.plotly_chart(fig_heat, use_container_width=True)
 
 # ==========================================
-# 5. ANÁLISE TÁTICA (FADIGA POR CONTEXTO)
+# 5. ANÁLISE TÁTICA CONSOLIDADA (HISTÓRIA DO JOGO)
 # ==========================================
 st.markdown("---")
-st.subheader("📌 Contexto Tático dos Apagões")
+st.header("📖 Contexto Tático e Cronologia dos Apagões")
 
-# Mapeamento de cores baseado no texto da coluna 'Placar'
+# Mapeamento de cores expandido para cobrir todas as variações do seu Placar
 mapa_cores_placar = {
-    "Ganhando 1": "#2E7D32", # Verde
-    "Perdendo 1": "#C62828", # Vermelho
-    "Empatando": "#F9A825"   # Amarelo/Laranja
+    "Ganhando 1": "#2E7D32", "Ganhando 2": "#1B5E20", 
+    "Perdendo 1": "#C62828", "Perdendo 2": "#B71C1C", 
+    "Empatando": "#F9A825"
 }
 
-# Novo Gráfico de Ranking cruzando Atleta com o Placar do momento do apagão
-df_tatica = df_ausente.groupby(['Name', 'Placar']).size().reset_index(name='Minutos')
+# Layout em colunas: Volume à esquerda e Timeline à direita
+col_vol, col_time = st.columns([1, 1.2])
 
-fig_tatica = px.bar(df_tatica, 
-                  y="Name", x="Minutos", color="Placar",
-                  title="Em que situação o atleta 'apaga' mais?",
-                  color_discrete_map=mapa_cores_placar,
-                  template='plotly_white', orientation='h')
+with col_vol:
+    st.subheader("Em que situação o atleta 'apaga' mais?")
+    df_tatica = df_ausente.groupby(['Name', 'Placar']).size().reset_index(name='Minutos')
+    
+    fig_vol = px.bar(df_tatica, y="Name", x="Minutos", color="Placar",
+                    color_discrete_map=mapa_cores_placar,
+                    template='plotly_white', orientation='h')
+    
+    fig_vol.update_layout(barmode='stack', yaxis={'categoryorder':'total ascending'}, 
+                         height=500, showlegend=False) # Legend oculta para não repetir
+    st.plotly_chart(fig_vol, use_container_width=True)
 
-fig_tatica.update_layout(
-    barmode='stack', 
-    yaxis={'categoryorder':'total ascending'},
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-)
+with col_time:
+    st.subheader("Timeline: Performance vs. Placar")
+    atleta_foco = st.selectbox("Selecione um Atleta para análise detalhada:", df_periodo['Name'].unique())
+    
+    # Preparação da Timeline do Placar
+    min_max = int(df_periodo['Interval'].max())
+    timeline_game = pd.DataFrame({'Interval': range(1, min_max + 1)})
+    
+    # Pegamos o placar minuto a minuto do jogo
+    status_jogo = df_periodo[['Interval', 'Placar']].drop_duplicates().sort_values('Interval')
+    timeline_game = pd.merge(timeline_game, status_jogo, on='Interval', how='left').ffill()
 
-st.plotly_chart(fig_tatica, use_container_width=True)
+    # Gráfico de Área para o fundo colorido (A História do Jogo)
+    fig_historia = px.area(timeline_game, x="Interval", y=[1]*len(timeline_game), color="Placar",
+                           color_discrete_map=mapa_cores_placar,
+                           template='plotly_white')
 
-# No seu arquivo 2__Radar_Fadiga.py, adicione este gráfico:
+    # Adicionamos os "X" pretos (Apagões) do atleta selecionado
+    df_atleta_ausente = df_periodo[(df_periodo['Name'] == atleta_foco) & (df_periodo[col_v4] <= 0)]
+    
+    fig_historia.add_trace(go.Scatter(
+        x=df_atleta_ausente['Interval'], 
+        y=[0.5]*len(df_atleta_ausente),
+        mode='markers',
+        name='Apagão (V4 <= 0)',
+        marker=dict(color='black', symbol='x', size=10, line=dict(width=1)),
+        hovertemplate='Apagão no Minuto %{x}<extra></extra>'
+    ))
 
-st.subheader("📖 Linha do Tempo: A História do Jogo vs. Intensidade")
+    fig_historia.update_layout(
+        height=400, 
+        yaxis={'visible': False},
+        xaxis_title="Minutos de Jogo",
+        legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5)
+    )
+    st.plotly_chart(fig_historia, use_container_width=True)
 
-# Preparamos um DF que tem todos os minutos do tempo selecionado
-min_max = int(df_periodo['Interval'].max())
-timeline_game = pd.DataFrame({'Interval': range(1, min_max + 1)})
-timeline_game = pd.merge(timeline_game, df_periodo[['Interval', 'Placar']].drop_duplicates(), on='Interval', how='left')
-
-# Criamos o gráfico de "Área" para mostrar a flutuação do placar ao fundo
-fig_historia = px.area(timeline_game, x="Interval", y=[1]*len(timeline_game), color="Placar",
-                       title="Linha do Tempo: Contexto do Placar minuto a minuto",
-                       color_discrete_map=mapa_cores_placar,
-                       template='plotly_white',
-                       labels={'y': 'Jogo Ativo'})
-
-# Adicionamos pontos pretos (ou X) onde o ATLETA SELECIONADO não fez V4
-# (Precisa filtrar um atleta específico para esta visualização)
-atleta_foco = st.selectbox("Selecione um Atleta para ver na Timeline:", df_periodo['Name'].unique())
-df_atleta_ausente = df_periodo[(df_periodo['Name'] == atleta_foco) & (df_periodo[col_v4] <= 0)]
-
-fig_historia.add_trace(go.Scatter(
-    x=df_atleta_ausente['Interval'], 
-    y=[0.5]*len(df_atleta_ausente),
-    mode='markers',
-    name='Minuto sem V4',
-    marker=dict(color='black', symbol='x', size=8),
-    hovertemplate='Apagão no Minuto %{x}<extra></extra>'
-))
-
-fig_historia.update_layout(height=300, showlegend=True, yaxis={'visible': False})
-st.plotly_chart(fig_historia, use_container_width=True)
+# Alerta de Insight Fisiológico
+st.info(f"💡 **Dica de Análise:** Se os 'X' pretos do **{atleta_foco}** surgem concentrados no final de um bloco de cor (ex: final do período perdendo), isso indica fadiga física acumulada. Se surgem logo após uma mudança de placar, pode ser um abalo anímico/tático.")
