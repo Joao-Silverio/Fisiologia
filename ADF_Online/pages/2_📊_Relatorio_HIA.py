@@ -169,19 +169,32 @@ for periodo in periodos_para_analise:
         delta_vs_equipe = ((total_hia_periodo / media_hia_equipe) - 1) * 100 if media_hia_equipe > 0 else 0.0
 
         # =====================================================================
-        # RENDERIZAÇÃO DOS BOTÕES (Agora com 5 colunas)
+        # RENDERIZAÇÃO DOS BOTÕES (REORDENADOS E FORMATADOS)
         # =====================================================================
         k1, k2, k3, k4, k5 = st.columns(5)
-        k1.metric("HIA Total (Soma)", f"{total_hia_periodo:.0f} ações")
-        k2.metric("Minutos Jogados", f"{minuto_maximo} min")
-        k3.metric("Densidade (HIA/min)", f"{densidade:.2f}")
-        k4.metric("Maior Gap sem HIA", f"{maior_gap_descanso} min seguidos", delta="Recuperação", delta_color="normal")
         
-        # --- O NOVO BOTÃO DA EQUIPE ---
-        k5.metric("Média da Equipe (HIA)", f"{media_hia_equipe:.0f} ações", delta=f"{delta_vs_equipe:+.1f}% (Atleta vs Equipe)", delta_color="normal")
+        # 1. Minutos Jogados (Inteiro)
+        k1.metric("Minutos Jogados", f"{minuto_maximo} min")
+        
+        # 2. HIA Total (2 casas decimais)
+        k2.metric("HIA Total (Soma)", f"{total_hia_periodo:.2f} ações")
+        
+        # 3. Média da Equipe (2 casas decimais + Delta %)
+        k3.metric(
+            "Média da Equipe (HIA)", 
+            f"{media_hia_equipe:.2f} ações", 
+            delta=f"{delta_vs_equipe:+.2f}% vs Equipe", 
+            delta_color="normal"
+        )
+        
+        # 4. Densidade (2 casas decimais)
+        k4.metric("Densidade (HIA/min)", f"{densidade:.2f}")
+        
+        # 5. Tempo sem ação/Gap (2 casas decimais)
+        k5.metric("Maior Gap sem HIA", f"{maior_gap_descanso} min", delta="Recuperação", delta_color="normal")
 
         # =====================================================================
-        # GRÁFICO EMPILHADO
+        # GRÁFICO EMPILHADO (Ajustado para 2 casas decimais no hover)
         # =====================================================================
         df_melted = df_timeline_full.melt(
             id_vars=['Interval'], 
@@ -208,7 +221,7 @@ for periodo in periodos_para_analise:
                 mode='lines',
                 name='Média da Equipe',
                 line=dict(color='#212121', width=2, dash='dot'),
-                hovertemplate='Média Equipe: %{y:.1f} ações<extra></extra>'
+                hovertemplate='Média Equipe: %{y:.2f} ações<extra></extra>' # Formatação no gráfico
             ))
 
         fig.update_layout(
@@ -225,7 +238,8 @@ for periodo in periodos_para_analise:
                 orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=None
             )
         )
-        fig.update_traces(hovertemplate='%{y:.0f} ações', selector=dict(type='bar'))
+        # Formatação de 2 casas decimais nas barras ao passar o mouse
+        fig.update_traces(hovertemplate='%{y:.2f} ações', selector=dict(type='bar'))
 
         st.plotly_chart(fig, use_container_width=True, key=f"hia_stacked_{periodo}")
         
