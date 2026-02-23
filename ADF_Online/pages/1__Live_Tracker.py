@@ -83,34 +83,26 @@ coluna_jogo = 'Data'
 coluna_minuto = 'Interval'
 
 # =====================================================================
-# 3. FILTROS NA TELA PRINCIPAL (COM FILTRO GLOBAL DE CAMPEONATO)
+# 3. FILTROS NA TELA PRINCIPAL (COM FILTRO GLOBAL MULTIPLO)
 # =====================================================================
 st.markdown("### 🔍 Filtros de Análise")
 
 with st.container():
     
     # --- O NOVO FILTRO GLOBAL MÚLTIPLO ---
-    lista_campeonatos = sorted(df_completo['Competição'].dropna().unique().tolist())
+    lista_campeonatos = sorted(df_completo['Campeonato'].dropna().unique().tolist())
     
-    # O multiselect cria uma caixa elegante onde os campeonatos viram "tags"
     campeonatos_selecionados = st.multiselect(
         "🏆 Campeonatos (Deixe vazio para incluir TODOS):", 
         options=lista_campeonatos,
-        default=[] # Começa vazio, ou seja, carregando a base inteira por padrão
+        default=[] # Começa vazio (mostrando a base inteira)
     )
     
-    # A Lógica do "Vazio = Todos":
+    # A Lógica do "Vazio = Todos"
     if not campeonatos_selecionados: 
         df_base = df_completo.copy()
     else:
-        # A função .isin() permite que o filtro aceite 1, 2 ou 10 campeonatos ao mesmo tempo!
         df_base = df_completo[df_completo['Campeonato'].isin(campeonatos_selecionados)].copy()
-    
-    # O Pulo do Gato: A partir daqui, o sistema usa o df_base filtrado para alimentar o ML
-    if campeonato_selecionado != "Todos os Campeonatos":
-        df_base = df_completo[df_completo['Campeonato'] == campeonato_selecionado].copy()
-    else:
-        df_base = df_completo.copy()
 
     # Linha 1: 4 Colunas para deixar todos os controles lado a lado
     col1, col2, col3, col4 = st.columns([1.5, 1.5, 1.5, 1.5])
@@ -126,7 +118,7 @@ with st.container():
     with col4:
         ordem_graficos = st.radio("Ordem na Tela:", ("1º Tempo no Topo", "2º Tempo no Topo"), horizontal=True)
 
-    # A lógica usando df_base (Garante que só apareçam jogadores e jogos DESTE campeonato)
+    # A lógica usando df_base (Garante que só apareçam jogadores e jogos DESTE(S) campeonato(s))
     if modo_filtro == "Focar no Atleta":
         lista_atletas = df_base['Name'].dropna().unique()
         atletas_ordenados = sorted(lista_atletas)
@@ -157,29 +149,29 @@ with st.container():
         if not atleta_selecionado and len(atletas_ordenados) > 0:
             atleta_selecionado = atletas_ordenados[0]
 
-# Recupera a data original escondida (Com trava de segurança caso o campeonato não tenha jogos)
-if jogo_selecionado_display:
-    jogo_selecionado = df_base[df_base['Data_Display'] == jogo_selecionado_display]['Data'].iloc[0]
-else:
-    st.warning("Nenhum dado encontrado para este campeonato.")
-    st.stop()
-
-# Define as colunas conforme a métrica
-if metrica_selecionada == "Total Distance":
-    coluna_distancia = 'Total Distance'
-    coluna_acumulada = 'Dist Acumulada'
-    titulo_grafico = f'Projeção de Distância - {atleta_selecionado}'
-elif metrica_selecionada == "V4 Dist":
-    coluna_distancia = 'V4 Dist'
-    coluna_acumulada = 'V4 Dist Acumulada'
-    titulo_grafico = f'Projeção de V4 Dist - {atleta_selecionado}'
-else:
-    coluna_distancia = 'HIA'
-    coluna_acumulada = 'HIA Acumulada'
-    titulo_grafico = f'Projeção de HIA - {atleta_selecionado}'
-
-# Filtra o dataframe base para o atleta escolhido usando o DF protegido!
-df_atleta = df_base[df_base['Name'] == atleta_selecionado].copy()
+    # Recupera a data original escondida (Com trava de segurança)
+    if jogo_selecionado_display:
+        jogo_selecionado = df_base[df_base['Data_Display'] == jogo_selecionado_display]['Data'].iloc[0]
+    else:
+        st.warning("Nenhum dado encontrado para o(s) campeonato(s) selecionado(s).")
+        st.stop()
+    
+    # Define as colunas conforme a métrica
+    if metrica_selecionada == "Total Distance":
+        coluna_distancia = 'Total Distance'
+        coluna_acumulada = 'Dist Acumulada'
+        titulo_grafico = f'Projeção de Distância - {atleta_selecionado}'
+    elif metrica_selecionada == "V4 Dist":
+        coluna_distancia = 'V4 Dist'
+        coluna_acumulada = 'V4 Dist Acumulada'
+        titulo_grafico = f'Projeção de V4 Dist - {atleta_selecionado}'
+    else:
+        coluna_distancia = 'HIA'
+        coluna_acumulada = 'HIA Acumulada'
+        titulo_grafico = f'Projeção de HIA - {atleta_selecionado}'
+    
+    # Filtra o dataframe base para o atleta escolhido usando o DF protegido!
+    df_atleta = df_base[df_base['Name'] == atleta_selecionado].copy()
 
 # =====================================================================
 # 4. MOTOR DE GERAÇÃO DOS GRÁFICOS E ML (1º e 2º TEMPO)
