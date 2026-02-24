@@ -69,7 +69,7 @@ with st.container():
         modo_filtro = st.radio("Prioridade:", ("Focar no Atleta", "Focar no Jogo"), horizontal=True)
         
     with col3:
-        metrica_selecionada = st.pills("Métrica:", ["Total Distance", "V4 Dist", "HIA"], default="V4 Dist")
+        metrica_selecionada = st.pills("Métrica:", ["Total Distance", "V4 Dist", "V5 Dist", "HIA", "V4 Eff", "V5 Eff"], default="V4 Dist")
         if not metrica_selecionada:
             metrica_selecionada = "V4 Dist"
             
@@ -114,15 +114,27 @@ with st.container():
         st.warning("Nenhum dado encontrado para o(s) campeonato(s) selecionado(s).")
         st.stop()
     
-    # Define as colunas conforme a métrica
+    # Define as colunas conforme a métrica selecionada
     if metrica_selecionada == "Total Distance":
         coluna_distancia = 'Total Distance'
         coluna_acumulada = 'Dist Acumulada'
-        titulo_grafico = f'Projeção de Distância - {atleta_selecionado}'
+        titulo_grafico = f'Projeção de Distância Total - {atleta_selecionado}'
     elif metrica_selecionada == "V4 Dist":
         coluna_distancia = 'V4 Dist'
         coluna_acumulada = 'V4 Dist Acumulada'
         titulo_grafico = f'Projeção de V4 Dist - {atleta_selecionado}'
+    elif metrica_selecionada == "V5 Dist":
+        coluna_distancia = 'V5 Dist'
+        coluna_acumulada = 'V5 Dist Acumulada'
+        titulo_grafico = f'Projeção de Sprints (V5 Dist) - {atleta_selecionado}'
+    elif metrica_selecionada == "V4 Eff":
+        coluna_distancia = 'V4 To8 Eff'
+        coluna_acumulada = 'V4 Eff Acumulada'
+        titulo_grafico = f'Projeção de Ações V4+ - {atleta_selecionado}'
+    elif metrica_selecionada == "V5 Eff":
+        coluna_distancia = 'V5 To8 Eff'
+        coluna_acumulada = 'V5 Eff Acumulada'
+        titulo_grafico = f'Projeção de Ações V5+ (Sprints) - {atleta_selecionado}'
     else:
         coluna_distancia = 'HIA'
         coluna_acumulada = 'HIA Acumulada'
@@ -144,11 +156,19 @@ for periodo in periodos_para_analise:
     # Filtra o dataframe SÓ para o tempo que está sendo desenhado agora
     df_periodo = df_atleta[df_atleta['Período'] == periodo].copy()
 
-    # Calcular o Acumulado (Garante que cada tempo comece do zero)
+   # Calcular o Acumulado (Garante que cada tempo comece do zero)
     df_periodo = df_periodo.sort_values(by=[coluna_jogo, coluna_minuto])
     df_periodo['Dist Acumulada'] = df_periodo.groupby(coluna_jogo)['Total Distance'].cumsum()
     df_periodo['V4 Dist Acumulada'] = df_periodo.groupby(coluna_jogo)['V4 Dist'].cumsum()
     
+    # ---> NOVAS MÉTRICAS ACUMULADAS <---
+    if 'V5 Dist' in df_periodo.columns:
+        df_periodo['V5 Dist Acumulada'] = df_periodo.groupby(coluna_jogo)['V5 Dist'].cumsum()
+    if 'V4 To8 Eff' in df_periodo.columns:
+        df_periodo['V4 Eff Acumulada'] = df_periodo.groupby(coluna_jogo)['V4 To8 Eff'].cumsum()
+    if 'V5 To8 Eff' in df_periodo.columns:
+        df_periodo['V5 Eff Acumulada'] = df_periodo.groupby(coluna_jogo)['V5 To8 Eff'].cumsum()
+        
     if 'HIA' in df_periodo.columns:
         df_periodo['HIA Acumulada'] = df_periodo.groupby(coluna_jogo)['HIA'].cumsum()
         
@@ -255,7 +275,7 @@ for periodo in periodos_para_analise:
         # =====================================================================
         # RENDERIZAÇÃO NA TELA (Roda com ou sem Inteligência Artificial)
         # =====================================================================
-        unidade = "" if metrica_selecionada == "HIA" else " m"
+        unidade = "" if metrica_selecionada in ["HIA", "V4 Eff", "V5 Eff"] else " m"
         def fmt_dist(x): return f"{x:.0f}{unidade}" if not np.isnan(x) else "N/A"
         def fmt_pct(x): return f"{x:+.1f}%" if not np.isnan(x) else "N/A"
 
