@@ -288,6 +288,25 @@ for periodo in periodos_para_analise:
         k3.metric(f"Projeção Final (min {minuto_final_proj})", fmt_dist(carga_projetada))
         k4.metric(f"Ritmo Previsto", fmt_pct(delta_projetado_pct), delta=fmt_pct(delta_projetado_pct), delta_color=cor_delta)
         k5.metric(f"Player Load", f"{pl_atual_acumulado:.0f}", delta=fmt_pct(delta_pl_pct), delta_color="inverse")
+       
+        # Recuperar recorde do atleta
+        if 'df_recordes' in st.session_state:
+            rec = st.session_state['df_recordes']
+            recorde_atleta = rec[rec['Name'] == atleta_selecionado]['Recorde_5min_HIA'].values
+            val_recorde = recorde_atleta[0] if len(recorde_atleta) > 0 else 0
+            
+            # Calcular esforço atual (últimos 5 min)
+            esforço_atual_5m = df_atual[coluna_distancia].tail(5).mean()
+            percentual_do_limite = (esforço_atual_5m / val_recorde * 100) if val_recorde > 0 else 0
+        
+            # Adicionar novo Card de KPI
+            k6, k7 = st.columns(2) # Ajuste a disposição conforme seu layout
+            k6.metric(
+                label="Proximidade do Limite (5 min)",
+                value=f"{percentual_do_limite:.1f}%",
+                delta=f"Recorde: {val_recorde:.1f}",
+                help="Compara a intensidade dos últimos 5 minutos com o bloco mais intenso que este atleta já fez na temporada."
+            )
 
         # =====================================================================
         # GRÁFICO PLOTLY MODO CLARO
