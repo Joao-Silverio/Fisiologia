@@ -95,7 +95,7 @@ df_agrupado = df_jogo.groupby('Name')[cols_existentes].sum().reset_index()
 df_agrupado['AccDec_Total'] = df_agrupado.get('Acc3 Eff', 0) + df_agrupado.get('Dec3 Eff', 0)
 
 # Calcula os Minutos Jogados (Max Interval) por atleta
-minutos_jogados = df_jogo.groupby('Name')['Interval'].max().reset_index()
+minutos_jogados = df_jogo.groupby('Name')['Interval'].nunique().reset_index()
 df_agrupado = pd.merge(df_agrupado, minutos_jogados, on='Name')
 df_agrupado.rename(columns={'Interval': 'Minutos Jogados'}, inplace=True)
 
