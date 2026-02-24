@@ -643,4 +643,4 @@ for target in TARGETS:
                 'features': resultados[target]['FEATURES'],
                 'mae':      resultados[target]['MAE_RF'] if modelos_finais[target]['nome'] == 'RandomForest' else resultados[target]['MAE_XGB']
             }, f)
-        print(f"  ✔ Salvo: modelo_{target}.pkl")───────────────────────────
+        print(f"  ✔ Salvo: modelo_{target}.pkl")#───────────────────────────

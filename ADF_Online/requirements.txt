@@ -5,3 +5,7 @@ plotly
 streamlit-autorefresh
 python-calamine
 openpyxl
+xgboost
+scikit-learn
+shap
+scipy
