@@ -30,15 +30,28 @@ import pandas as pd
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def carregar_modelo_treinado(diretorio):
-    """Tenta carregar o modelo XGBoost salvo pelo predictive_v3.py."""
-    caminho = os.path.join(diretorio, 'modelo_dist.pkl')
+def carregar_modelo_treinado(diretorio, metrica_selecionada):
+    """Carrega o modelo específico para a métrica que o usuário escolheu na tela."""
+    mapa_arquivos = {
+        "Total Distance": "modelo_Dist_Total.pkl",
+        "V4 Dist": "modelo_V4_Dist.pkl",
+        "V5 Dist": "modelo_V5_Dist.pkl",
+        "V4 Eff": "modelo_V4_Eff.pkl",
+        "V5 Eff": "modelo_V5_Eff.pkl",
+        "HIA": "modelo_HIA_Total.pkl"
+    }
+    
+    # Se a métrica não estiver no mapa, não carrega nenhum modelo (usa fallback)
+    if metrica_selecionada not in mapa_arquivos:
+        return None
+        
+    nome_arquivo = mapa_arquivos[metrica_selecionada]
+    caminho = os.path.join(diretorio, nome_arquivo)
     try:
         with open(caminho, 'rb') as f:
             return pickle.load(f)
     except FileNotFoundError:
         return None
-
 
 def calcular_dias_descanso(df_atleta, jogo_atual):
     """Calcula dias desde o jogo anterior do atleta."""
@@ -234,7 +247,7 @@ def executar_ml_ao_vivo(
     ) if hasattr(jogo_atual_nome, 'year') or isinstance(jogo_atual_nome, str) else 7
 
     # ── Tentar modelo treinado primeiro ──────────────────────────────────────
-    modelo_dict = carregar_modelo_treinado(DIRETORIO_ATUAL)
+    modelo_dict = carregar_modelo_treinado(DIRETORIO_ATUAL, metrica_selecionada)
     acumulado_pred = []
 
     if modelo_dict is not None:
