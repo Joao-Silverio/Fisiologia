@@ -279,7 +279,7 @@ for periodo in periodos_para_analise:
         def fmt_dist(x): return f"{x:.0f}{unidade}" if not np.isnan(x) else "N/A"
         def fmt_pct(x): return f"{x:+.1f}%" if not np.isnan(x) else "N/A"
 
-        k0, k1, k2, k3, k4, k5 = st.columns(6)
+        k0, k1, k2, k3, k4, k5, k6 = st.columns(7)
         cor_delta = "normal" if metrica_selecionada in ["V4 Dist", "HIA", "Total Distance"] else "inverse"
         
         k0.metric("Volume Atual", fmt_dist(carga_atual))
@@ -300,7 +300,6 @@ for periodo in periodos_para_analise:
             percentual_do_limite = (esforço_atual_5m / val_recorde * 100) if val_recorde > 0 else 0
         
             # Adicionar novo Card de KPI
-            k6, k7 = st.columns(2) # Ajuste a disposição conforme seu layout
             k6.metric(
                 label="Proximidade do Limite (5 min)",
                 value=f"{percentual_do_limite:.1f}%",
