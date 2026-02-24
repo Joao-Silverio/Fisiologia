@@ -2,22 +2,14 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objs as go
-import plotly.express as px # Importante para o gráfico empilhado
-import os
-import shutil
+import plotly.express as px
 import warnings
 
-# =====================================================================
-# 1. CONFIGURAÇÃO DA PÁGINA
-# =====================================================================
 st.set_page_config(page_title="Relatório HIA - Timeline", layout="wide")
 
 st.markdown("""
     <style>
-        .block-container {
-            padding-top: 1rem;
-            padding-bottom: 1rem;
-        }
+        .block-container { padding-top: 1rem; padding-bottom: 1rem; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -25,47 +17,18 @@ warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 st.title("⚡ Timeline HIA: Espectro de Intensidade")
 
 # =====================================================================
-# 2. CARREGAMENTO DE DADOS BLINDADO
+# RECUPERANDO DADOS GLOBAIS
 # =====================================================================
-DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
-DIRETORIO_RAIZ = os.path.dirname(DIRETORIO_ATUAL)
-arquivo_original = os.path.join(DIRETORIO_RAIZ, 'ADF OnLine 2024.xlsb')
-
-@st.cache_resource(show_spinner=False)
-def carregar_dados():
-    arquivo_temp = 'ADF_TEMP_HIA_STACKED.xlsb'
-    try:
-        shutil.copy2(arquivo_original, arquivo_temp)
-        df = pd.read_excel(arquivo_temp, engine='calamine') 
-        df.columns = df.columns.str.strip()
-        
-        # Lista MESTRE de colunas que compõem o HIA (Agora com 'Competição')
-        colunas_desejadas = [
-            'Data', 'Interval', 'Name', 'Período', 'Adversário', 'Competição',
-            'V4 To8 Eff', 'V5 To8 Eff', 'V6 To8 Eff', 
-            'Acc3 Eff', 'Dec3 Eff', 'Acc4 Eff', 'Dec4 Eff'
-        ]
-        
-        # Filtra apenas as que existem no Excel do usuário
-        colunas_existentes = [c for c in colunas_desejadas if c in df.columns]
-        df = df[colunas_existentes]
-        
-        # Preenche vazios com 0 nas métricas para não quebrar contas
-        cols_metricas = [c for c in colunas_existentes if c not in ['Data', 'Interval', 'Name', 'Período', 'Adversário', 'Competição']]
-        df[cols_metricas] = df[cols_metricas].fillna(0)
-        
-        return df, cols_metricas
-        
-    except Exception as e:
-        st.error(f"Erro na leitura: {e}")
-        return None, []
-
-df_completo, cols_componentes_hia = carregar_dados()
-
-if df_completo is None or df_completo.empty:
+if 'df_global' not in st.session_state:
+    st.warning("⚠️ Carregue os dados na página principal (Home) primeiro.")
     st.stop()
 
-df_completo['Data_Display'] = pd.to_datetime(df_completo['Data']).dt.strftime('%d/%m/%Y') + ' ' + df_completo['Adversário'].astype(str)
+# Pega os dados já calculados e formatados
+df_completo = st.session_state['df_global'].copy()
+
+# Mapeia as colunas de componentes do HIA disponíveis
+colunas_desejadas = ['V4 To8 Eff', 'V5 To8 Eff', 'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Acc4 Eff', 'Dec4 Eff']
+cols_componentes_hia = [c for c in colunas_desejadas if c in df_completo.columns]
 
 # =====================================================================
 # 3. FILTROS NA TELA PRINCIPAL (PADRÃO LIVE TRACKER)
@@ -177,7 +140,7 @@ for periodo in periodos_para_analise:
         k1.metric("Minutos Jogados", f"{minuto_maximo} min")
         
         # 2. HIA Total (2 casas decimais)
-        k2.metric("HIA Total (Soma)", f"{total_hia_periodo:.2f} ações")
+        k2.metric("HIA Total", f"{total_hia_periodo:.2f} ações")
         
         # 3. Média da Equipe (2 casas decimais + Delta %)
         k3.metric(
@@ -191,7 +154,7 @@ for periodo in periodos_para_analise:
         k4.metric("Densidade (HIA/min)", f"{densidade:.2f}")
         
         # 5. Tempo sem ação/Gap (2 casas decimais)
-        k5.metric("Maior Gap sem HIA", f"{maior_gap_descanso} min", delta="Recuperação", delta_color="normal")
+        k5.metric("Tempo Máx. sem Estímulo", f"{maior_gap_descanso} min", delta="Recuperação", delta_color="normal", help="Maior sequência de minutos sem ações de alta intensidade, indicando o tempo máximo de recuperação durante o período.")
 
         # =====================================================================
         # GRÁFICO EMPILHADO (Ajustado para 2 casas decimais no hover)

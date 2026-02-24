@@ -29,23 +29,19 @@ hora_atualizacao = obter_hora_modificacao(arquivo_original)
 # 1. Função Global de Carregamento Turbo
 @st.cache_resource(show_spinner="Carregando base de dados da temporada na velocidade da luz...")
 def load_global_data(hora_mod):
-    # Criamos um temporário com nome diferente do Live Tracker para não haver conflitos
     arquivo_temp = 'ADF_TEMP_HOME.xlsb' 
     
     try:
         shutil.copy2(arquivo_original, arquivo_temp)
         
-        # Lista de todas as colunas que os seus Módulos (HIA, Radar, etc.) vão precisar.
-        # Se no futuro criar um gráfico novo, lembre-se de adicionar a coluna aqui!
+        # Incluímos TODAS as colunas que qualquer página vai precisar
         colunas_necessarias = [
             'Data', 'Interval', 'Name', 'Período', 'Placar', 'Resultado', 'Adversário',
-            'Total Distance', 'V4 Dist', 'V4 To8 Eff', 'V5 To8 Eff', 
-            'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Player Load',
-            'Parte (15 min)', 'Parte (5 min)', 'Parte (3 min)', 'Competição'
+            'Total Distance', 'V4 Dist', 'V5 Dist', 'V4 To8 Eff', 'V5 To8 Eff', 
+            'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Acc4 Eff', 'Dec4 Eff', 'Player Load',
+            'Parte (15 min)', 'Parte (5 min)', 'Parte (3 min)', 'Competição', 'Metabolic Power'
         ]
         
-        # Lemos o Excel com o motor 'calamine'. 
-        # O lambda garante que se uma coluna não existir no Excel, o código não quebra.
         df = pd.read_excel(
             arquivo_temp, 
             engine='calamine',
@@ -53,6 +49,23 @@ def load_global_data(hora_mod):
         )
         
         df.columns = df.columns.str.strip()
+
+        # =================================================================
+        # CÁLCULOS CENTRALIZADOS (Feitos apenas 1 vez para todo o sistema)
+        # =================================================================
+        # 1. Preencher Nulos com Zero nas métricas numéricas
+        cols_metricas = [c for c in df.columns if c not in ['Data', 'Name', 'Adversário', 'Competição', 'Placar', 'Resultado', 'Parte (15 min)', 'Parte (5 min)', 'Parte (3 min)']]
+        df[cols_metricas] = df[cols_metricas].fillna(0)
+
+        # 2. Criar Métrica HIA Global
+        df['HIA'] = (
+            df.get('V4 To8 Eff', 0) + df.get('V5 To8 Eff', 0) + 
+            df.get('V6 To8 Eff', 0) + df.get('Acc3 Eff', 0) + df.get('Dec3 Eff', 0)
+        )
+
+        # 3. Formatar Datas de Exibição
+        df['Data_Display'] = pd.to_datetime(df['Data'], errors='coerce').dt.strftime('%d/%m/%Y') + ' ' + df['Adversário'].astype(str)
+
         return df
         
     except PermissionError:

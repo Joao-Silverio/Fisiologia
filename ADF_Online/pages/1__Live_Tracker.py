@@ -3,24 +3,16 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objs as go
 import plotly.express as px
-import shutil
 import os
 import warnings
 from streamlit_autorefresh import st_autorefresh
 from ml_engine import executar_ml_ao_vivo
 
-# =====================================================================
-# 1. CONFIGURAÇÃO DA PÁGINA WEB E AJUSTE DE MARGEM
-# =====================================================================
 st.set_page_config(page_title="Live Tracker Físico", layout="wide")
 
-# CSS para remover o espaço gigante do topo
 st.markdown("""
     <style>
-        .block-container {
-            padding-top: 1rem;
-            padding-bottom: 1rem;
-        }
+        .block-container { padding-top: 1rem; padding-bottom: 1rem; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -32,56 +24,21 @@ st.caption(f"Última atualização automática: Ciclo {contador}")
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
 # =====================================================================
-# 2. CARREGAMENTO DE DADOS (Caminhos Dinâmicos e Engine Rápida)
+# RECUPERANDO DADOS GLOBAIS (Sem redundância de carregamento!)
 # =====================================================================
-def obter_hora_modificacao(caminho_ficheiro):
-    try:
-        return os.path.getmtime(caminho_ficheiro)
-    except FileNotFoundError:
-        return 0
-
-DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
-DIRETORIO_RAIZ = os.path.dirname(DIRETORIO_ATUAL)
-arquivo_original = os.path.join(DIRETORIO_RAIZ, 'ADF OnLine 2024.xlsb')
-
-hora_atualizacao = obter_hora_modificacao(arquivo_original)
-
-@st.cache_resource(show_spinner=False)
-def carregar_dados(hora_mod):
-    arquivo_temp = 'ADF_TEMP_LIVE.xlsb'
-    try:
-        shutil.copy2(arquivo_original, arquivo_temp)
-        colunas_necessarias = [
-            'Data', 'Interval', 'Name', 'Período', 'Placar', 'Adversário',
-            'Total Distance', 'V4 Dist', 'V4 To8 Eff', 'V5 To8 Eff', 
-            'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Player Load', 'Competição'
-        ]
-        df = pd.read_excel(arquivo_temp, engine='calamine', usecols=colunas_necessarias) 
-        df.columns = df.columns.str.strip()
-        return df
-    except Exception as e:
-        st.error(f"Erro na leitura: {e}")
-        return None
-
-df_completo = carregar_dados(hora_atualizacao)
-
-if df_completo is None:
+if 'df_global' not in st.session_state:
+    st.warning("⚠️ Carregue os dados na página principal (Home) primeiro.")
     st.stop()
 
-# Criar a métrica HIA somando ações de alta intensidade
-df_completo['HIA'] = (
-    df_completo['V4 To8 Eff'].fillna(0) + 
-    df_completo['V5 To8 Eff'].fillna(0) + 
-    df_completo['V6 To8 Eff'].fillna(0) + 
-    df_completo['Acc3 Eff'].fillna(0) + 
-    df_completo['Dec3 Eff'].fillna(0)
-)
-
-# Formatar datas para exibição bonita
-df_completo['Data_Display'] = pd.to_datetime(df_completo['Data']).dt.strftime('%d/%m/%Y') + ' ' + df_completo['Adversário'].astype(str)
+# Pega os dados já limpos e calculados pela Home
+df_completo = st.session_state['df_global'].copy()
+DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
 
 coluna_jogo = 'Data'
 coluna_minuto = 'Interval'
+
+# DAQUI PARA BAIXO, PODE MANTER O SEU CÓDIGO A PARTIR DE:
+# st.markdown("### 🔍 Filtros de Análise")
 
 # =====================================================================
 # 3. FILTROS NA TELA PRINCIPAL (COM FILTRO GLOBAL MULTIPLO)
@@ -305,12 +262,12 @@ for periodo in periodos_para_analise:
         k0, k1, k2, k3, k4, k5 = st.columns(6)
         cor_delta = "normal" if metrica_selecionada in ["V4 Dist", "HIA", "Total Distance"] else "inverse"
         
-        k0.metric("Carga Atual", fmt_dist(carga_atual))
-        k1.metric("vs Própria Média", fmt_pct(delta_alvo_pct), delta=fmt_pct(delta_alvo_pct), delta_color=cor_delta)
-        k2.metric("Ritmo Coletivo (Jogo)", fmt_pct(delta_time_pct), delta=f"{fmt_pct(delta_atleta_vs_time)} (Atleta vs Jogo)", delta_color=cor_delta)
-        k3.metric(f"Carga Proj. (min {minuto_final_proj})", fmt_dist(carga_projetada))
+        k0.metric("Volume Atual", fmt_dist(carga_atual))
+        k1.metric("Desempenho vs Histórico", fmt_pct(delta_alvo_pct), delta=fmt_pct(delta_alvo_pct), delta_color=cor_delta)
+        k2.metric("Ritmo vs Média Equipe", fmt_pct(delta_time_pct), delta=f"{fmt_pct(delta_atleta_vs_time)} (Atleta vs Jogo)", delta_color=cor_delta)
+        k3.metric(f"Projeção Final (min {minuto_final_proj})", fmt_dist(carga_projetada))
         k4.metric(f"Ritmo Previsto", fmt_pct(delta_projetado_pct), delta=fmt_pct(delta_projetado_pct), delta_color=cor_delta)
-        k5.metric(f"Desgaste Sistêmico (PL)", f"{pl_atual_acumulado:.0f}", delta=fmt_pct(delta_pl_pct), delta_color="inverse")
+        k5.metric(f"Player Load", f"{pl_atual_acumulado:.0f}", delta=fmt_pct(delta_pl_pct), delta_color="inverse")
 
         # =====================================================================
         # GRÁFICO PLOTLY MODO CLARO

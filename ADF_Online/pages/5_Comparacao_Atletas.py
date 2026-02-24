@@ -137,12 +137,12 @@ def kpi_card(col, label, val1, val2, unidade=""):
         </div>
         """, unsafe_allow_html=True)
 
-kpi_card(col_kpi1, "Distância Total", df_a1.get('Total Distance', 0), df_a2.get('Total Distance', 0), "m")
+kpi_card(col_kpi1, "Distância", df_a1.get('Total Distance', 0), df_a2.get('Total Distance', 0), "m")
 kpi_card(col_kpi2, "HIA (Total)", df_a1.get('HIA_Total', 0), df_a2.get('HIA_Total', 0), "")
-kpi_card(col_kpi3, "V4 Distância", df_a1.get('V4 Dist', 0), df_a2.get('V4 Dist', 0), "m")
+kpi_card(col_kpi3, "Distância em V4", df_a1.get('V4 Dist', 0), df_a2.get('V4 Dist', 0), "m")
 # Novo Card: Sprint V5
-kpi_card(col_kpi4, "Sprint (V5)", df_a1.get('V5 Dist', 0), df_a2.get('V5 Dist', 0), "m")
-kpi_card(col_kpi5, "Força (Acc/Dec)", df_a1.get('AccDec_Total', 0), df_a2.get('AccDec_Total', 0), "")
+kpi_card(col_kpi4, "Distância em Sprints", df_a1.get('V5 Dist', 0), df_a2.get('V5 Dist', 0), "m")
+kpi_card(col_kpi5, "Acc + Dec", df_a1.get('AccDec_Total', 0), df_a2.get('AccDec_Total', 0), "")
 kpi_card(col_kpi6, "Player Load", df_a1.get('Player Load', 0), df_a2.get('Player Load', 0), "")
 
 # ==========================================
