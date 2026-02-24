@@ -7,6 +7,7 @@ import shutil
 import os
 import warnings
 from streamlit_autorefresh import st_autorefresh
+from ml_engine import executar_ml_ao_vivo
 
 # =====================================================================
 # 1. CONFIGURAÇÃO DA PÁGINA WEB E AJUSTE DE MARGEM
@@ -268,69 +269,28 @@ for periodo in periodos_para_analise:
                 peso_placar = 0.0
                 placar_atual = "Coluna não encontrada"
                 
-            st.info(f"🧠 **ML Engine ({periodo}º Tempo):** Tática ('{placar_atual}'). Ajuste: 70% Ritmo vs 30% Player Load.")
+            ml = executar_ml_ao_vivo(
+            df_historico, df_atual, df_base,
+            coluna_distancia, coluna_acumulada, coluna_minuto, coluna_jogo,
+            jogo_atual_nome, periodo, minuto_projecao_ate, metrica_selecionada,
+            atleta_selecionado, DIRETORIO_ATUAL
+        )
 
-            curva_media_acumulada_geral = df_historico.groupby(coluna_minuto)[coluna_acumulada].mean()
-            if 'Player Load Acumulada' in df_historico.columns:
-                curva_media_pl_geral = df_historico.groupby(coluna_minuto)['Player Load Acumulada'].mean()
-            else:
-                curva_media_pl_geral = curva_media_acumulada_geral
-            
-            if minuto_atual in curva_media_acumulada_geral.index:
-                media_acumulada_neste_minuto = curva_media_acumulada_geral.loc[minuto_atual]
-                media_pl_neste_minuto = curva_media_pl_geral.loc[minuto_atual] if minuto_atual in curva_media_pl_geral.index else pl_atual_acumulado
-            else:
-                media_acumulada_neste_minuto = carga_atual 
-                media_pl_neste_minuto = pl_atual_acumulado
-                
-            fator_alvo = (carga_atual / media_acumulada_neste_minuto) if media_acumulada_neste_minuto > 0 else 1.0
-            fator_pl = (pl_atual_acumulado / media_pl_neste_minuto) if media_pl_neste_minuto > 0 else 1.0
-            
-            peso_player_load = 0.3 
-            fator_hoje = (fator_alvo * (1 - peso_player_load)) + (fator_pl * peso_player_load)
+            # Desempacotar os resultados (substitui as variáveis que existiam antes)
+            minutos_futuros       = ml['minutos_futuros']
+            acumulado_pred        = ml['acumulado_pred']
+            pred_superior         = ml['pred_superior']
+            pred_inferior         = ml['pred_inferior']
+            carga_projetada       = ml['carga_projetada']
+            minuto_final_proj     = ml['minuto_final_proj']
+            delta_alvo_pct        = ml['delta_alvo_pct']
+            delta_pl_pct          = ml['delta_pl_pct']
+            delta_projetado_pct   = ml['delta_projetado_pct']
+            delta_time_pct        = ml['delta_time_pct']
+            delta_atleta_vs_time  = ml['delta_atleta_vs_time']
 
-            minutos_futuros = list(range(minuto_atual + 1, minuto_projecao_ate + 1))
-            valor_projetado_atual = carga_atual 
-            
-            for m in minutos_futuros:
-                dist_g = media_min_geral.loc[m] if m in media_min_geral.index else 0
-                dist_c = media_min_cenario.loc[m] if m in media_min_cenario.index else dist_g
-                
-                dist_mesclada = (dist_c * peso_placar) + (dist_g * (1 - peso_placar))
-                dist_mesclada = max(0, dist_mesclada)
-                
-                dist_projetada_minuto = dist_mesclada * fator_hoje
-                valor_projetado_atual += dist_projetada_minuto
-                acumulado_pred.append(valor_projetado_atual)
-            
-            margem_erro = 0.05
-            pred_superior = [val * (1 + margem_erro) for val in acumulado_pred]
-            pred_inferior = [val * (1 - margem_erro) for val in acumulado_pred]
+            st.info(f"🧠 **{ml['modelo_usado']}** | Placar: '{ml['placar_atual']}' | Descanso: {ml['dias_descanso']}d | MetPow: {ml['met_power_atual']:.1f}" if ml['met_power_atual'] else f"🧠 **{ml['modelo_usado']}**")
 
-            # --- PREPARAÇÃO DOS KPIs ---
-            carga_projetada = acumulado_pred[-1] if len(acumulado_pred) > 0 else carga_atual
-            minuto_final_proj = minutos_futuros[-1] if len(minutos_futuros) > 0 else minuto_atual
-
-            delta_alvo_pct = (fator_alvo - 1) * 100 
-            delta_pl_pct = (fator_pl - 1) * 100
-            
-            if minuto_final_proj in curva_media_acumulada_geral.index:
-                media_historica_futura = curva_media_acumulada_geral.loc[minuto_final_proj]
-            else:
-                media_historica_futura = media_acumulada_neste_minuto
-
-            fator_projetado = (carga_projetada / media_historica_futura) if media_historica_futura > 0 else 1.0
-            delta_projetado_pct = (fator_projetado - 1) * 100
-            
-            # --- RITMO COLETIVO ---
-            df_time_hoje = df_base[(df_base['Data'] == jogo_atual_nome) & (df_base['Período'] == periodo) & (df_base['Interval'] <= minuto_atual)]
-            df_time_hist = df_base[(df_base['Data'] != jogo_atual_nome) & (df_base['Período'] == periodo) & (df_base['Interval'] <= minuto_atual)]
-
-            carga_hoje_time = df_time_hoje.groupby('Name')[coluna_distancia].sum().mean() if not df_time_hoje.empty else 0
-            carga_hist_time = df_time_hist.groupby(['Data', 'Name'])[coluna_distancia].sum().mean() if not df_time_hist.empty else carga_hoje_time
-            
-            delta_time_pct = ((carga_hoje_time / carga_hist_time) - 1) * 100 if carga_hist_time > 0 else 0.0
-            delta_atleta_vs_time = delta_alvo_pct - delta_time_pct
 
         else:
             st.warning("Pouco histórico neste campeonato para ativar a IA. Mostrando os dados em tempo real puros.")
