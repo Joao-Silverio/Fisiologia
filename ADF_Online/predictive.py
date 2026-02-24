@@ -46,7 +46,8 @@ JANELA_INTRA         = 5    # períodos de 5 min para janela deslizante
 MINUTO_CORTE_AO_VIVO = 45
 RANDOM_STATE         = 42
 
-TARGETS = ['Dist_Total', 'Load_Total']   # nomes após o groupby/rename
+# Agora o modelo vai treinar um motor de ML para CADA UMA destas variáveis
+TARGETS = ['Dist_Total', 'Load_Total', 'V4_Dist', 'V5_Dist', 'V4_Eff', 'V5_Eff', 'HIA_Total']
 
 print("=" * 65)
 print("  MODELO PREDITIVO AO VIVO — v3.0")
@@ -207,6 +208,10 @@ agg_dict = {
     'Total Distance':   'sum',
     'Player Load':      'sum',
     'HIA':              'sum',
+    'V4 Dist':          'sum', # Adicionado
+    'V5 Dist':          'sum', # Adicionado
+    'V4 To8 Eff':       'sum', # Adicionado
+    'V5 To8 Eff':       'sum', # Adicionado
     'HS_Dist':          'sum',
     'Sprint_Dist':      'sum',
     'Acc3 Eff':         'sum',
@@ -230,6 +235,10 @@ df_jogo = df_jogo.rename(columns={
     'Total Distance': 'Dist_Total',
     'Player Load':    'Load_Total',
     'HIA':            'HIA_Total',
+    'V4 Dist':        'V4_Dist', # Adicionado
+    'V5 Dist':        'V5_Dist', # Adicionado
+    'V4 To8 Eff':     'V4_Eff',  # Adicionado
+    'V5 To8 Eff':     'V5_Eff',  # Adicionado
     'HS_Dist':        'HS_Total',
     'Sprint_Dist':    'Sprint_Total',
     'Acc3 Eff':       'Acc3_Total',
@@ -619,16 +628,19 @@ for target in TARGETS:
 print("=" * 65)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PASSO 1 — Salvar o modelo no predictive_v3.py (adicione ao final dele):
+# SALVANDO OS MODELOS TREINADOS PARA O STREAMLIT
 # ─────────────────────────────────────────────────────────────────────────────
 import pickle
-caminho_modelo = os.path.join(DIRETORIO_ATUAL, 'modelo_dist.pkl')
-with open(caminho_modelo, 'wb') as f:
-    pickle.dump({
-        'modelo':   modelos_finais['Dist_Total']['melhor'],
-        'features': resultados['Dist_Total']['FEATURES'],
-        'mae':      min(resultados['Dist_Total']['MAE_RF'],
-                       resultados['Dist_Total']['MAE_XGB'])
-    }, f)
-print(f"Modelo salvo em {caminho_modelo}")
-#  ────────────────────────────────────────
+
+print("\n[EXPORTAÇÃO] Salvando modelos para a aplicação Web...")
+for target in TARGETS:
+    if target in modelos_finais:
+        caminho_modelo = os.path.join(DIRETORIO_ATUAL, f'modelo_{target}.pkl')
+        
+        with open(caminho_modelo, 'wb') as f:
+            pickle.dump({
+                'modelo':   modelos_finais[target]['melhor'],
+                'features': resultados[target]['FEATURES'],
+                'mae':      resultados[target]['MAE_RF'] if modelos_finais[target]['nome'] == 'RandomForest' else resultados[target]['MAE_XGB']
+            }, f)
+        print(f"  ✔ Salvo: modelo_{target}.pkl")───────────────────────────
