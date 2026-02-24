@@ -40,7 +40,7 @@ warnings.filterwarnings('ignore')
 # CONFIGURAÇÕES
 # ─────────────────────────────────────────────────────────────────────────────
 DIRETORIO_ATUAL      = os.path.dirname(os.path.abspath(__file__))
-CAMINHO_EXCEL        = os.path.join(DIRETORIO_ATUAL, 'ADF OnLine 2024.xlsx')
+CAMINHO_EXCEL        = os.path.join(DIRETORIO_ATUAL, 'ADF OnLine 2024.xlsb')
 N_SPLITS_CV          = 5
 JANELA_INTRA         = 5    # períodos de 5 min para janela deslizante
 MINUTO_CORTE_AO_VIVO = 45
@@ -58,7 +58,7 @@ print("=" * 65)
 # ─────────────────────────────────────────────────────────────────────────────
 print("\n[1/7] Carregando dados...")
 
-df = pd.read_excel(CAMINHO_EXCEL, engine='openpyxl')
+df = pd.read_excel(CAMINHO_EXCEL, engine='calamine')
 df.columns = df.columns.str.strip()
 df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
 df = df.dropna(subset=['Data', 'Name', 'Interval'])
@@ -472,7 +472,7 @@ for _, row in df_ultimo[df_ultimo['Name'].isin(top_atletas)].iterrows():
 df_sim = pd.DataFrame(df_sim_list)
 
 # ── Gráfico 1: Feature Importance SHAP (ambos os targets) ──────────────────
-targets_com_shap = [t for t in TARGETS if t in shap_dfs]
+'''targets_com_shap = [t for t in TARGETS if t in shap_dfs]
 fig1 = None
 
 if len(targets_com_shap) > 0:
@@ -585,6 +585,7 @@ if 'Prev_Load_Total'    in df_sim.columns: fig3.show()
 if df_m_dist is not None:                   fig4.show()
 if 'Prev_Dist_Total' in df_sim.columns: fig5.show()
 fig6.show()
+'''
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -607,12 +608,27 @@ for target in TARGETS:
             print(f"      • {row['Feature']:<30}  SHAP: {row['SHAP_Abs']:.2f}")
 
 # Exportar
-saida_prev = os.path.join(DIRETORIO_ATUAL, 'previsoes_ao_vivo.csv')
-saida_shap = os.path.join(DIRETORIO_ATUAL, 'shap_importance.csv')
-df_sim.to_csv(saida_prev, index=False)
-if 'Dist_Total' in shap_dfs:
-    shap_dfs['Dist_Total'].to_csv(saida_shap, index=False)
+#saida_prev = os.path.join(DIRETORIO_ATUAL, 'previsoes_ao_vivo.csv')
+#saida_shap = os.path.join(DIRETORIO_ATUAL, 'shap_importance.csv')
+#df_sim.to_csv(saida_prev, index=False)
+#if 'Dist_Total' in shap_dfs:
+#    shap_dfs['Dist_Total'].to_csv(saida_shap, index=False)
 
-print(f"\n  ✔  Previsões ao vivo  → {saida_prev}")
-print(f"  ✔  Importância SHAP   → {saida_shap}")
+#print(f"\n  ✔  Previsões ao vivo  → {saida_prev}")
+#print(f"  ✔  Importância SHAP   → {saida_shap}")
 print("=" * 65)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PASSO 1 — Salvar o modelo no predictive_v3.py (adicione ao final dele):
+# ─────────────────────────────────────────────────────────────────────────────
+import pickle
+caminho_modelo = os.path.join(DIRETORIO_ATUAL, 'modelo_dist.pkl')
+with open(caminho_modelo, 'wb') as f:
+    pickle.dump({
+        'modelo':   modelos_finais['Dist_Total']['melhor'],
+        'features': resultados['Dist_Total']['FEATURES'],
+        'mae':      min(resultados['Dist_Total']['MAE_RF'],
+                       resultados['Dist_Total']['MAE_XGB'])
+    }, f)
+print(f"Modelo salvo em {caminho_modelo}")
+#  ────────────────────────────────────────
