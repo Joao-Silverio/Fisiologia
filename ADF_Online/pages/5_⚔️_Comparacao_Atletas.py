@@ -238,36 +238,15 @@ with col_timeline:
         )
         return fig
 
-    # Renderização de cada aba
+    # Renderização de cada aba (COM A KEY ADICIONADA PARA EVITAR ERROS)
     with tab0:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'Total_Dist_Acum', 'Distância Total Acumulada (m)'), use_container_width=True)
+        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'Total_Dist_Acum', 'Distância Total Acumulada (m)'), use_container_width=True, key="grafico_tab0")
         
     with tab1:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V4_Acum', 'Volume de V4 (m)'), use_container_width=True)
+        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V4_Acum', 'Volume de V4 (m)'), use_container_width=True, key="grafico_tab1")
         
     with tab2:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V5_Acum', f'Volume de Sprint'), use_container_width=True)
+        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V5_Acum', 'Volume de Sprint'), use_container_width=True, key="grafico_tab2")
         
     with tab3:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'AccDec_Acum', 'Ações de Acc/Dec'), use_container_width=True)
-    
-    def desenhar_grafico_linha(df1, df2, coluna_y, titulo_y):
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df1['Interval'], y=df1[coluna_y], mode='lines', name=atleta_1, line=dict(color='#EF5350', width=3)))
-        fig.add_trace(go.Scatter(x=df2['Interval'], y=df2[coluna_y], mode='lines', name=atleta_2, line=dict(color='#42A5F5', width=3)))
-        fig.update_layout(
-            template='plotly_white', height=380,
-            xaxis_title="Minuto de Jogo", yaxis_title=titulo_y,
-            hovermode="x unified", margin=dict(t=10, b=10, l=10, r=10),
-            legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5)
-        )
-        return fig
-
-    with tab1:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V4_Acum', 'Volume de V4 (m)'), use_container_width=True)
-        
-    with tab2:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V5_Acum', f'Volume de Sprint'), use_container_width=True)
-        
-    with tab3:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'AccDec_Acum', 'Ações de Acc/Dec'), use_container_width=True)
+        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'AccDec_Acum', 'Ações de Acc/Dec'), use_container_width=True, key="grafico_tab3")

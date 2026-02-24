@@ -4,6 +4,7 @@ import numpy as np
 import plotly.graph_objs as go
 import plotly.express as px
 import warnings
+import config # <--- IMPORTANDO O CONFIG
 
 st.set_page_config(page_title="Relatório HIA - Timeline", layout="wide")
 
@@ -26,9 +27,8 @@ if 'df_global' not in st.session_state:
 # Pega os dados já calculados e formatados
 df_completo = st.session_state['df_global'].copy()
 
-# Mapeia as colunas de componentes do HIA disponíveis
-colunas_desejadas = ['V4 To8 Eff', 'V5 To8 Eff', 'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Acc4 Eff', 'Dec4 Eff']
-cols_componentes_hia = [c for c in colunas_desejadas if c in df_completo.columns]
+# Mapeia as colunas de componentes do HIA usando o config.py
+cols_componentes_hia = [c for c in config.COLS_COMPONENTES_HIA if c in df_completo.columns]
 
 # =====================================================================
 # 3. FILTROS NA TELA PRINCIPAL (PADRÃO LIVE TRACKER)
@@ -75,12 +75,6 @@ df_atleta_jogo = df_base[(df_base['Name'] == atleta_selecionado) & (df_base['Dat
 # =====================================================================
 # 4. MOTOR DO GRÁFICO EMPILHADO (STACKED BAR CHART)
 # =====================================================================
-# Mapa de cores semântico para diferenciar os tipos de esforço
-color_map = {
-    'V4 To8 Eff': '#FFAB91', 'V5 To8 Eff': '#FF7043', 'V6 To8 Eff': '#D84315', # Vermelhos (Velocidade)
-    'Acc3 Eff': '#90CAF9', 'Acc4 Eff': '#1976D2', # Azuis (Aceleração)
-    'Dec3 Eff': '#A5D6A7', 'Dec4 Eff': '#388E3C'  # Verdes (Desaceleração)
-}
 
 periodos_para_analise = [1, 2] if ordem_graficos == "1º Tempo no Topo" else [2, 1]
 
@@ -172,7 +166,7 @@ for periodo in periodos_para_analise:
             x='Interval',
             y='Qtd Ações',
             color='Tipo de Esforço',
-            color_discrete_map=color_map, 
+            color_discrete_map=config.MAPA_CORES_HIA, # <--- USANDO O CONFIG AQUI
             title=None 
         )
 

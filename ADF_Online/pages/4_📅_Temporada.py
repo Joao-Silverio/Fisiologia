@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import config
 
 # =====================================================================
 # 1. CONFIGURAÇÃO E ESTILO
@@ -225,11 +226,7 @@ with tab1: # Pode criar uma nova tab4 se preferir
         color='Placar',
         title="Intensidade Média da Equipe por Condição do Jogo",
         labels={'HIA': 'Média de Ações Intensas (HIA)'},
-        color_discrete_map={
-            "Ganhando 1": "#2E7D32", "Ganhando 2": "#1B5E20", 
-            "Perdendo 1": "#C62828", "Perdendo 2": "#B71C1C", 
-            "Empatando": "#F9A825"
-        },
+        color_discrete_map=config.MAPA_CORES_PLACAR, # Usando o mapa de cores do config.py
         template='plotly_white'
     )
     st.plotly_chart(fig_placar, use_container_width=True)

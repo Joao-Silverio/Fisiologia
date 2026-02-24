@@ -632,10 +632,20 @@ print("=" * 65)
 # ─────────────────────────────────────────────────────────────────────────────
 import pickle
 
-print("\n[EXPORTAÇÃO] Salvando modelos para a aplicação Web...")
+# ─────────────────────────────────────────────────────────────────────────────
+# SALVANDO OS MODELOS TREINADOS PARA O STREAMLIT
+# ─────────────────────────────────────────────────────────────────────────────
+import pickle
+
+# Define o caminho da pasta models e cria ela se não existir
+DIRETORIO_MODELOS = os.path.join(DIRETORIO_ATUAL, 'models')
+os.makedirs(DIRETORIO_MODELOS, exist_ok=True)
+
+print("\n[EXPORTAÇÃO] Salvando modelos para a aplicação Web na pasta 'models'...")
 for target in TARGETS:
     if target in modelos_finais:
-        caminho_modelo = os.path.join(DIRETORIO_ATUAL, f'modelo_{target}.pkl')
+        # Agora salva apontando para DIRETORIO_MODELOS
+        caminho_modelo = os.path.join(DIRETORIO_MODELOS, f'modelo_{target}.pkl')
         
         with open(caminho_modelo, 'wb') as f:
             pickle.dump({
@@ -643,4 +653,4 @@ for target in TARGETS:
                 'features': resultados[target]['FEATURES'],
                 'mae':      resultados[target]['MAE_RF'] if modelos_finais[target]['nome'] == 'RandomForest' else resultados[target]['MAE_XGB']
             }, f)
-        print(f"  ✔ Salvo: modelo_{target}.pkl")#───────────────────────────
+        print(f"  ✔ Salvo: models/modelo_{target}.pkl")

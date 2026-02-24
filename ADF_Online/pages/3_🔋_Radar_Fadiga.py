@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import config # <--- IMPORTANDO O CONFIG AQUI
 
 # 1. CONFIGURAÇÃO E ESTILO
 st.set_page_config(page_title="Radar de Fadiga", layout="wide")
@@ -99,12 +100,7 @@ st.markdown("---")
 st.header("🕵️‍♂️ Mapa de Ociosidade sobre a História do Jogo")
 st.markdown("As barras coloridas aparecem **apenas** quando o atleta parou de correr. Os espaços vazios representam os momentos de ação.")
 
-# 1. Configuração de Cores
-mapa_cores_placar = {
-    "Ganhando 1": "#2E7D32", "Ganhando 2": "#1B5E20", 
-    "Perdendo 1": "#C62828", "Perdendo 2": "#B71C1C", 
-    "Empatando": "#F9A825"
-}
+# O DICIONÁRIO DE CORES FOI REMOVIDO DAQUI
 
 # 2. Preparação da Timeline do Jogo (Fundo)
 min_max = int(df_periodo['Interval'].max())
@@ -126,7 +122,8 @@ for placar_val in df_apenas_ausencia['Placar'].unique():
         base=df_group['Interval'] - 0.5, # A barra é posicionada no minuto exato em que ocorreu
         orientation='h',
         name=placar_val,
-        marker_color=mapa_cores_placar.get(placar_val, '#888888'),
+        # <--- USANDO O CONFIG AQUI:
+        marker_color=config.MAPA_CORES_PLACAR.get(placar_val, '#888888'), 
         hovertemplate="Atleta: %{y}<br>Minuto: %{base}<extra></extra>"
     ))
 
@@ -134,7 +131,9 @@ for placar_val in df_apenas_ausencia['Placar'].unique():
 for i in range(len(status_jogo)):
     min_inicio = status_jogo.iloc[i]['Interval']
     min_fim = status_jogo.iloc[i+1]['Interval'] if i+1 < len(status_jogo) else min_max
-    cor_contexto = mapa_cores_placar.get(status_jogo.iloc[i]['Placar'], "#EEEEEE")
+    
+    # <--- USANDO O CONFIG AQUI:
+    cor_contexto = config.MAPA_CORES_PLACAR.get(status_jogo.iloc[i]['Placar'], "#EEEEEE")
     
     fig_final.add_vrect(
         x0=min_inicio - 0.5, x1=min_fim + 0.5,

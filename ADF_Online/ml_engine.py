@@ -13,40 +13,25 @@ import os
 import pickle
 import numpy as np
 import pandas as pd
+import config # <-- Importamos as configurações
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PASSO 1 — Salvar o modelo no predictive_v3.py (adicione ao final dele):
-# ─────────────────────────────────────────────────────────────────────────────
-# import pickle
-# caminho_modelo = os.path.join(DIRETORIO_ATUAL, 'modelo_dist.pkl')
-# with open(caminho_modelo, 'wb') as f:
-#     pickle.dump({
-#         'modelo':   modelos_finais['Dist_Total']['melhor'],
-#         'features': resultados['Dist_Total']['FEATURES'],
-#         'mae':      min(resultados['Dist_Total']['MAE_RF'],
-#                        resultados['Dist_Total']['MAE_XGB'])
-#     }, f)
-# print(f"Modelo salvo em {caminho_modelo}")
-# ─────────────────────────────────────────────────────────────────────────────
 
+import os
+import pickle
+import numpy as np
+import pandas as pd
+import config # <-- Importamos as configurações
 
 def carregar_modelo_treinado(diretorio, metrica_selecionada):
-    """Carrega o modelo específico para a métrica que o usuário escolheu na tela."""
-    mapa_arquivos = {
-        "Total Distance": "modelo_Dist_Total.pkl",
-        "V4 Dist": "modelo_V4_Dist.pkl",
-        "V5 Dist": "modelo_V5_Dist.pkl",
-        "V4 Eff": "modelo_V4_Eff.pkl",
-        "V5 Eff": "modelo_V5_Eff.pkl",
-        "HIA": "modelo_HIA_Total.pkl"
-    }
-    
-    # Se a métrica não estiver no mapa, não carrega nenhum modelo (usa fallback)
-    if metrica_selecionada not in mapa_arquivos:
+    """Carrega o modelo específico baseado no config.py, buscando na pasta models."""
+    if metrica_selecionada not in config.METRICAS_CONFIG:
         return None
         
-    nome_arquivo = mapa_arquivos[metrica_selecionada]
-    caminho = os.path.join(diretorio, nome_arquivo)
+    nome_arquivo = config.METRICAS_CONFIG[metrica_selecionada]["arquivo_modelo"]
+    
+    # Agora ele usa o caminho DIRETORIO_MODELOS configurado no config.py
+    caminho = os.path.join(config.DIRETORIO_MODELOS, nome_arquivo)
+    
     try:
         with open(caminho, 'rb') as f:
             return pickle.load(f)
