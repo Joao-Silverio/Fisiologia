@@ -47,6 +47,15 @@ if 'Acc3 Eff' in df_atleta_jogo.columns and 'Dec3 Eff' in df_atleta_jogo.columns
 df_equipa_jogo = df_atleta_jogo.groupby(['Data', 'Data_Display', 'Competição'])[cols_existentes].mean().reset_index()
 df_equipa_jogo = df_equipa_jogo.sort_values('Data')
 
+# --- Implementação Opção 3: Recordes de Intensidade (Worst-Case Scenario) ---
+# Calculamos a maior média de HIA em blocos de 5 minutos para cada atleta na temporada
+df_wcs = df_raw.groupby(['Name', 'Data', 'Data_Display'])['HIA'].rolling(window=5, min_periods=5).mean().reset_index()
+df_recordes = df_wcs.groupby('Name')['HIA'].max().reset_index()
+df_recordes.rename(columns={'HIA': 'Recorde_5min_HIA'}, inplace=True)
+
+# Guardamos no session_state para usar no Live Tracker depois
+st.session_state['df_recordes'] = df_recordes
+
 # =====================================================================
 # 3. FILTROS GLOBAIS (Progressive Disclosure)
 # =====================================================================
@@ -201,3 +210,27 @@ with tab3:
         )
         fig_bottom.update_layout(yaxis={'categoryorder':'total descending'}, height=350, showlegend=False, coloraxis_showscale=False)
         st.plotly_chart(fig_bottom, use_container_width=True)
+
+# --- Implementação Opção 4: Placar vs. Intensidade ---
+with tab1: # Pode criar uma nova tab4 se preferir
+    st.markdown("### 🏟️ Comportamento Tático-Físico (Placar vs. HIA)")
+    
+    # Agrupamos a intensidade média por status do placar
+    df_placar_int = df_raw.groupby('Placar')['HIA'].mean().reset_index()
+    
+    fig_placar = px.bar(
+        df_placar_int,
+        x='Placar',
+        y='HIA',
+        color='Placar',
+        title="Intensidade Média da Equipe por Condição do Jogo",
+        labels={'HIA': 'Média de Ações Intensas (HIA)'},
+        color_discrete_map={
+            "Ganhando 1": "#2E7D32", "Ganhando 2": "#1B5E20", 
+            "Perdendo 1": "#C62828", "Perdendo 2": "#B71C1C", 
+            "Empatando": "#F9A825"
+        },
+        template='plotly_white'
+    )
+    st.plotly_chart(fig_placar, use_container_width=True)
+    st.info("💡 Este gráfico revela se a equipe mantém a intensidade alta mesmo quando está em vantagem ou se há um relaxamento físico.")
