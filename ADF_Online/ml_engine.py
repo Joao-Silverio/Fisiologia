@@ -89,8 +89,8 @@ def projetar_com_modelo_treinado(modelo_dict, row_atleta, minutos_futuros,
 
     sample = {f: row_atleta.get(f, 0) for f in features}
     
-    # CORREÇÃO 1: Prever até o fim do período atual (ex: 45 ou 50), não 90!
-    sample['Minutos'] = minuto_final_alvo
+    # A IA precisa saber o MINUTO EXATO onde o corte foi feito para saber o quanto falta jogar!
+    sample['Minutos'] = minuto_atual
     sample_df = pd.DataFrame([sample])[features]
 
     dist_final_prevista = float(modelo.predict(sample_df)[0])
