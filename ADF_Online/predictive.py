@@ -1,9 +1,9 @@
 """
 =============================================================================
-MODELO PREDITIVO AO VIVO — DESEMPENHO DE ATLETAS DE FUTEBOL (V4.0 - POR TEMPO)
+MODELO PREDITIVO AO VIVO — SNAPSHOTS MINUTO A MINUTO (VERSÃO DEFINITIVA)
 =============================================================================
-Agora o sistema treina modelos ML separadamente para o 1º e 2º Tempo, 
-respeitando a fisiologia da queda de rendimento real do atleta.
+Esta arquitetura treina a IA ensinando-a a entender a fadiga ao longo do tempo.
+1 Linha de Treino = 1 Momento do Jogo (ex: Minuto 15, Minuto 20, Minuto 26...)
 =============================================================================
 """
 
@@ -11,14 +11,9 @@ import os
 import warnings
 import numpy as np
 import pandas as pd
-import plotly.express as px
-
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import TimeSeriesSplit
+import pickle
 from sklearn.metrics import mean_absolute_error
 import xgboost as xgb
-import shap
-import pickle
 
 warnings.filterwarnings('ignore')
 
@@ -28,136 +23,167 @@ warnings.filterwarnings('ignore')
 DIRETORIO_ATUAL      = os.path.dirname(os.path.abspath(__file__))
 CAMINHO_EXCEL        = os.path.join(DIRETORIO_ATUAL, 'ADF OnLine 2024.xlsb')
 DIRETORIO_MODELOS    = os.path.join(DIRETORIO_ATUAL, 'Models')
-N_SPLITS_CV          = 5
-JANELA_INTRA         = 5
 RANDOM_STATE         = 42
 
-TARGETS = ['Dist_Total', 'Load_Total', 'V4_Dist', 'V5_Dist', 'V4_Eff', 'V5_Eff', 'HIA_Total']
-
 print("=" * 65)
-print("  MODELO PREDITIVO AO VIVO — v4.0 (SEPARADO POR TEMPO)")
+print("  MODELO PREDITIVO - ARQUITETURA DE SNAPSHOTS (MINUTO A MINUTO)")
 print("=" * 65)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 1 & 2. CARREGAMENTO E COLUNAS DERIVADAS
-# ─────────────────────────────────────────────────────────────────────────────
-print("\n[1/5] Carregando dados e variáveis derivadas...")
+# MAPEAMENTO DAS MÉTRICAS (Alvo Final vs Coluna Bruta do Catapult)
+MAPA_METRICAS = {
+    'Dist_Total': 'Total Distance',
+    'Load_Total': 'Player Load',
+    'V4_Dist':    'V4 Dist',
+    'V5_Dist':    'V5 Dist',
+    'V4_Eff':     'V4 To8 Eff',
+    'V5_Eff':     'V5 To8 Eff',
+    'HIA_Total':  'HIA' # (Calculada abaixo)
+}
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. CARREGAR DADOS E LIMPAR
+# ─────────────────────────────────────────────────────────────────────────────
+print("\n[1/4] Carregando dados base...")
 df = pd.read_excel(CAMINHO_EXCEL, engine='calamine')
 df.columns = df.columns.str.strip()
 df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
-df = df.dropna(subset=['Data', 'Name', 'Interval', 'Período']) # Agora exige Período
-df = df.sort_values(['Name', 'Data', 'Período', 'Interval']).reset_index(drop=True)
+df = df.dropna(subset=['Data', 'Name', 'Interval', 'Período'])
 
-# HIA
+# Extrair o minuto numérico
+if 'Interval (min)' in df.columns:
+    df['Min_Num'] = pd.to_numeric(df['Interval (min)'], errors='coerce').fillna(0)
+else:
+    df['Min_Num'] = pd.to_numeric(df['Interval'], errors='coerce').fillna(0)
+
+# Filtrar apenas 1º e 2º tempo, e ordenar cronologicamente
+df = df[df['Período'].isin([1, 2])]
+df = df.sort_values(['Name', 'Data', 'Período', 'Min_Num']).reset_index(drop=True)
+
+# Preencher N/A com 0 para as métricas base
+for col in MAPA_METRICAS.values():
+    if col != 'HIA' and col not in df.columns: df[col] = 0
+
+# Calcular HIA base
 hia_cols = ['V4 To8 Eff', 'V5 To8 Eff', 'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff']
-for c in hia_cols:
-    if c not in df.columns: df[c] = 0
-df['HIA'] = df[hia_cols].sum(axis=1)
+df['HIA'] = df[[c for c in hia_cols if c in df.columns]].sum(axis=1)
 
-# HR Pct
-hr_col = 'Avg Heart Rate As Percentage Of Max' if 'Avg Heart Rate As Percentage Of Max' in df.columns else 'Heart Rate As Percentage Of Max'
-df['HR_Pct'] = df[hr_col].fillna(0) if hr_col in df.columns else 0
-
-# Diff Gols
+# Resultado e Gols
 def extrair_diff_gols(placar):
     s = str(placar).strip().lower()
     if any(x in s for x in ['vencendo', 'vitoria', 'vitória', 'ganhando', 'v']): return 1
     if any(x in s for x in ['perdendo', 'derrota', 'd']): return -1
     return 0
-
 df['Diff_Gols'] = df['Placar'].apply(extrair_diff_gols) if 'Placar' in df.columns else 0
-df['Resultado'] = df['Diff_Gols'].apply(lambda x: 'V' if x > 0 else ('D' if x < 0 else 'E'))
-
-df['Min_Num'] = pd.to_numeric(df['Interval (min)' if 'Interval (min)' in df.columns else 'Interval'], errors='coerce').fillna(0)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. HISTÓRICO E RECUPERAÇÃO (AGRUPADO POR TEMPO)
+# 2. CONSTRUIR O "HISTÓRICO" (O QUE ELE FEZ NOS JOGOS ANTERIORES)
 # ─────────────────────────────────────────────────────────────────────────────
-print("\n[2/5] Construindo histórico agrupado por 1º e 2º Tempo...")
+print("\n[2/4] Calculando o histórico dos atletas (Sem olhar para o futuro)...")
 
-agg_dict = {
-    'Total Distance':   'sum', 'Player Load':      'sum', 'HIA':              'sum',
-    'V4 Dist':          'sum', 'V5 Dist':          'sum', 'V4 To8 Eff':       'sum',
-    'V5 To8 Eff':       'sum', 'HR_Pct':           'mean','Min_Num':          'max',
-    'Diff_Gols':        'last','Resultado':        'last',
-}
-for col in ['Equiv Distance Index', 'Metabolic Power']:
-    if col in df.columns: agg_dict[col] = 'mean'
-if 'Work Rate Dist' in df.columns: agg_dict['Work Rate Dist'] = 'sum'
+# Primeiro, agrupamos o total de cada jogo
+df_jogos = df.groupby(['Name', 'Data', 'Período']).agg({
+    'Total Distance': 'sum', 'Player Load': 'sum', 'V4 Dist': 'sum',
+    'V5 Dist': 'sum', 'V4 To8 Eff': 'sum', 'V5 To8 Eff': 'sum', 'HIA': 'sum',
+    'Diff_Gols': 'last'
+}).reset_index()
 
-# AGRUPA POR NOME, DATA E PERÍODO (1º e 2º Tempo)
-df_jogo = df.groupby(['Name', 'Data', 'Período']).agg(agg_dict).reset_index()
-df_jogo = df_jogo.rename(columns={
-    'Total Distance': 'Dist_Total', 'Player Load': 'Load_Total', 'HIA': 'HIA_Total',
-    'V4 Dist': 'V4_Dist', 'V5 Dist': 'V5_Dist', 'V4 To8 Eff': 'V4_Eff',
-    'V5 To8 Eff': 'V5_Eff', 'HR_Pct': 'HR_Medio', 'Min_Num': 'Minutos',
-})
-df_jogo = df_jogo.sort_values(['Name', 'Data', 'Período'])
-
-# Dias de descanso (calculado por dia, não por período)
-datas_unicas = df_jogo[['Name', 'Data']].drop_duplicates().sort_values(['Name', 'Data'])
+# Calculamos Dias de Descanso
+datas_unicas = df_jogos[['Name', 'Data']].drop_duplicates().sort_values(['Name', 'Data'])
 datas_unicas['Dias_Descanso'] = datas_unicas.groupby('Name')['Data'].diff().dt.days.fillna(7).clip(1, 30)
-df_jogo = df_jogo.merge(datas_unicas, on=['Name', 'Data'], how='left')
+df_jogos = df_jogos.merge(datas_unicas, on=['Name', 'Data'], how='left')
 
-# Expanding means POR PERÍODO (Média histórica do T1 não se mistura com T2)
-medias = {'Dist_Total': 'Media_Dist_Geral', 'Load_Total': 'Media_Load_Geral', 'HIA_Total': 'Media_HIA_Geral', 'HR_Medio': 'Media_HR_Geral'}
-for orig, dest in medias.items():
-    df_jogo[dest] = df_jogo.groupby(['Name', 'Período'])[orig].transform(lambda x: x.expanding().mean().shift(1))
+# Calculamos as Médias Expandidas (Tudo .shift(1) para a IA não trapacear)
+for metric_target, metric_base in MAPA_METRICAS.items():
+    # Média Geral daquela métrica no Período
+    df_jogos[f'Media_Geral_{metric_target}'] = df_jogos.groupby(['Name', 'Período'])[metric_base].transform(lambda x: x.expanding().mean().shift(1))
+    # Média dos últimos 3 jogos daquela métrica
+    df_jogos[f'Media_3J_{metric_target}'] = df_jogos.groupby(['Name', 'Período'])[metric_base].transform(lambda x: x.rolling(3, min_periods=1).mean().shift(1))
+    
+    # Criamos a "Tendência" (Ritmo recente vs Ritmo da vida toda)
+    df_jogos[f'Trend_{metric_target}'] = df_jogos[f'Media_3J_{metric_target}'] / (df_jogos[f'Media_Geral_{metric_target}'] + 1)
 
-for orig, dest in [('Dist_Total', 'Media_Dist_Contexto'), ('HIA_Total', 'Media_HIA_Contexto'), ('Load_Total', 'Media_Load_Contexto')]:
-    df_jogo[dest] = df_jogo.groupby(['Name', 'Período', 'Resultado'])[orig].transform(lambda x: x.expanding().mean().shift(1))
+df_jogos['Carga_3Jogos_PL'] = df_jogos.groupby(['Name', 'Período'])['Player Load'].transform(lambda x: x.rolling(3, min_periods=1).sum().shift(1))
+df_jogos['N_Jogos'] = df_jogos.groupby(['Name', 'Período']).cumcount()
 
-df_jogo['Carga_3Jogos'] = df_jogo.groupby(['Name', 'Período'])['Load_Total'].transform(lambda x: x.rolling(3, min_periods=1).sum().shift(1))
-df_jogo['Carga_7Jogos'] = df_jogo.groupby(['Name', 'Período'])['Load_Total'].transform(lambda x: x.rolling(7, min_periods=1).sum().shift(1))
+# Preenche os N/As do primeiro jogo com 0
+df_jogos = df_jogos.fillna(0)
 
-df_jogo['Media_Dist_3Jogos'] = df_jogo.groupby(['Name', 'Período'])['Dist_Total'].transform(lambda x: x.rolling(3, min_periods=1).mean().shift(1))
-df_jogo['Trend_Dist'] = df_jogo['Media_Dist_3Jogos'] / (df_jogo['Media_Dist_Geral'] + 1)
-df_jogo['N_Jogos'] = df_jogo.groupby(['Name', 'Período']).cumcount()
-
-colunas_num = df_jogo.select_dtypes(include='number').columns.tolist()
-df_jogo[colunas_num] = df_jogo[colunas_num].fillna(df_jogo.groupby('Name')[colunas_num].transform('median'))
-df_jogo[colunas_num] = df_jogo[colunas_num].fillna(0)
-df_jogo = df_jogo[df_jogo['Minutos'] > 5].copy()
+# Isolamos apenas as colunas de contexto histórico para colar na base principal
+cols_historico = ['Name', 'Data', 'Período', 'Dias_Descanso', 'Carga_3Jogos_PL', 'N_Jogos'] + \
+                 [col for col in df_jogos.columns if 'Media_Geral_' in col or 'Trend_' in col]
+df_historico_limpo = df_jogos[cols_historico]
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. TREINAMENTO (DOIS MODELOS POR MÉTRICA)
+# 3. CRIAR OS SNAPSHOTS MINUTO A MINUTO (O PULO DO GATO)
 # ─────────────────────────────────────────────────────────────────────────────
-print("\n[3/5] Treinando modelos por Tempo (T1 e T2)...")
+print("\n[3/4] Gerando os Snapshots (A IA assistindo ao jogo)...")
+
+# Para cada linha do GPS (Interval), calculamos o quanto ele JÁ ACUMULOU até ali
+grp = df.groupby(['Name', 'Data', 'Período'])
+for metric_target, metric_base in MAPA_METRICAS.items():
+    df[f'{metric_target}_Acumulado_Agora'] = grp[metric_base].cumsum()
+    # E descobrimos qual foi o valor que ele atingiu no FIM daquele período (O nosso Alvo de Previsão)
+    df[f'TARGET_{metric_target}'] = grp[metric_base].transform('sum')
+
+# Fundimos o histórico do pré-jogo em cada snapshot do minuto
+df_snapshots = df.merge(df_historico_limpo, on=['Name', 'Data', 'Período'], how='left')
+df_snapshots = df_snapshots.dropna(subset=['Min_Num'])
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. TREINAR OS MODELOS ESPECIALISTAS
+# ─────────────────────────────────────────────────────────────────────────────
+print("\n[4/4] Treinando os modelos XGBoost...")
 os.makedirs(DIRETORIO_MODELOS, exist_ok=True)
 
-FEATURES = ['Minutos', 'Dias_Descanso', 'Diff_Gols', 'N_Jogos', 'Media_Dist_Geral', 'Media_Load_Geral', 'Media_HIA_Geral', 'Media_HR_Geral', 'Media_Dist_Contexto', 'Media_HIA_Contexto', 'Media_Load_Contexto', 'Carga_3Jogos', 'Carga_7Jogos', 'Trend_Dist']
-for col in ['Equiv Distance Index', 'Metabolic Power', 'Work Rate Dist']:
-    if col in df_jogo.columns: FEATURES.append(col)
-
-FEATURES_VALIDAS = [f for f in FEATURES if f in df_jogo.columns]
-
-for periodo in [1, 2]:
-    print(f"\n  ⏱️  TREINANDO MODELOS PARA O {periodo}º TEMPO:")
-    df_p = df_jogo[df_jogo['Período'] == periodo].copy()
+# Vamos treinar 2 modelos (T1 e T2) para cada Métrica do nosso Mapa
+for metric_target in MAPA_METRICAS.keys():
+    print(f"\n🚀 Treinando IA para: {metric_target}")
     
-    for target in TARGETS:
-        if target not in df_p.columns: continue
-
-        df_m = df_p[FEATURES_VALIDAS + [target, 'Name', 'Data']].replace([np.inf, -np.inf], np.nan).dropna()
-        if len(df_m) < 10: continue
-
-        X = df_m[FEATURES_VALIDAS].values
-        y = df_m[target].values
-
-        modelo_xgb = xgb.XGBRegressor(n_estimators=400, max_depth=5, learning_rate=0.04, random_state=RANDOM_STATE, verbosity=0)
-        modelo_xgb.fit(X, y)
+    # As features MUDAM dependendo do que estamos a prever!
+    # Se formos prever V4_Dist, a IA vai focar no V4_Dist_Acumulado e na Media_Geral de V4
+    FEATURES_DA_METRICA = [
+        'Min_Num', 
+        'Dias_Descanso', 
+        'N_Jogos', 
+        'Carga_3Jogos_PL',
+        'Diff_Gols',
+        f'{metric_target}_Acumulado_Agora',   # O esforço HOJE nesta métrica
+        f'Media_Geral_{metric_target}',       # O que ele costuma fazer
+        f'Trend_{metric_target}'              # A forma recente dele
+    ]
+    
+    alvo = f'TARGET_{metric_target}'
+    
+    for periodo in [1, 2]:
+        df_treino = df_snapshots[(df_snapshots['Período'] == periodo) & (df_snapshots['Min_Num'] > 0)].copy()
+        df_treino = df_treino[FEATURES_DA_METRICA + [alvo]].dropna()
         
-        # O pulo do gato: Grava o nome com "_T1" ou "_T2" no final
-        caminho_modelo = os.path.join(DIRETORIO_MODELOS, f'modelo_{target}_T{periodo}.pkl')
+        if len(df_treino) < 50:
+            print(f"   ⚠️ Poucos dados para {metric_target} no T{periodo}. Pulando...")
+            continue
+            
+        X = df_treino[FEATURES_DA_METRICA].values
+        y = df_treino[alvo].values
         
-        with open(caminho_modelo, 'wb') as f:
+        # XGBoost poderoso: ele vai aprender que "Se Min_Num = 26 e Acumulado = X, então o Final é Y"
+        modelo = xgb.XGBRegressor(n_estimators=300, max_depth=5, learning_rate=0.05, random_state=RANDOM_STATE, verbosity=0)
+        modelo.fit(X, y)
+        
+        mae = mean_absolute_error(y, modelo.predict(X))
+        
+        # Guardar o modelo
+        nome_arquivo = f'modelo_{metric_target}_T{periodo}.pkl'
+        caminho_salvar = os.path.join(DIRETORIO_MODELOS, nome_arquivo)
+        
+        with open(caminho_salvar, 'wb') as f:
             pickle.dump({
-                'modelo':   modelo_xgb,
-                'features': FEATURES_VALIDAS,
-                'mae':      mean_absolute_error(y, modelo_xgb.predict(X))
+                'modelo': modelo,
+                'features': FEATURES_DA_METRICA,
+                'mae': mae
             }, f)
-        
-        print(f"     ✔ {target} (MAE: {mean_absolute_error(y, modelo_xgb.predict(X)):.1f}) -> Salvo como _T{periodo}.pkl")
+            
+        print(f"   ✔ T{periodo} salvo! (Erro Médio de Treino: {mae:.1f})")
 
-print("\n[5/5] Treinamento concluído com sucesso! Pode abrir o Live Tracker.")
+print("\n" + "=" * 65)
+print("✅ SUCESSO! A Fábrica de IA gerou os novos cérebros focados minuto a minuto.")
+print("=" * 65)
