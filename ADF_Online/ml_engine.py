@@ -80,9 +80,9 @@ def fator_fadiga_por_minuto(minuto, minuto_max_periodo=45):
     return max(0.75, decaimento)
 
 def projetar_com_modelo_treinado(modelo_dict, row_atleta, minutos_futuros,
-                                 dist_acumulada_atual, minuto_atual):
+                                 dist_acumulada_atual, minuto_atual, periodo):
     """
-    Usa o XGBoost treinado (que prevê o jogo todo) e escala a velocidade
+    Usa o XGBoost treinado por tempo e escala a velocidade
     exatamente para o tempo restante configurado nos filtros do Live Tracker.
     """
     features  = modelo_dict['features']
@@ -90,25 +90,26 @@ def projetar_com_modelo_treinado(modelo_dict, row_atleta, minutos_futuros,
 
     sample = {f: row_atleta.get(f, 0) for f in features}
     
-    # 1. Mantemos 90 para a IA prever o total do jogo corretamente sem bugar
-    sample['Minutos'] = 90
+    # 1. Como dividimos por tempo, o alvo não é 90, mas sim o fim do período!
+    minutos_totais_periodo = 48 if periodo == 1 else 50
+    sample['Minutos'] = minutos_totais_periodo
     sample_df = pd.DataFrame([sample])[features]
 
-    # Previsão total de 90 minutos (ex: 10.000m)
-    dist_final_prevista_90m = float(modelo.predict(sample_df)[0])
+    # Previsão total do período (ex: 5.000m no 1º tempo)
+    dist_final_prevista_periodo = float(modelo.predict(sample_df)[0])
 
-    # 2. Descobrimos a "velocidade média" projetada pela IA (ex: 111 metros por minuto)
-    taxa_por_minuto = dist_final_prevista_90m / 90.0
+    # 2. Descobrimos a "velocidade média" projetada
+    taxa_por_minuto = dist_final_prevista_periodo / float(minutos_totais_periodo)
 
-    # 3. Calculamos o volume exato que o atleta fará APENAS nos minutos futuros do filtro
+    # 3. Calculamos o volume exato que o atleta fará APENAS nos minutos futuros
     dist_restante_no_filtro = taxa_por_minuto * len(minutos_futuros)
     dist_restante_no_filtro = max(0, dist_restante_no_filtro)
 
-    # 4. Distribuímos esse volume de forma realista usando a curva de fadiga
+    # 4. Distribuímos o volume usando a curva de fadiga
     acumulado_pred = []
     acum = dist_acumulada_atual
     
-    fatores = [fator_fadiga_por_minuto(m) for m in minutos_futuros]
+    fatores = [fator_fadiga_por_minuto(m, minutos_totais_periodo) for m in minutos_futuros]
     soma_fatores = sum(fatores) if sum(fatores) > 0 else 1
 
     for m, fator in zip(minutos_futuros, fatores):
@@ -116,7 +117,6 @@ def projetar_com_modelo_treinado(modelo_dict, row_atleta, minutos_futuros,
         acum += dist_este_minuto
         acumulado_pred.append(acum)
 
-    # O valor final é a soma do que ele já tinha feito + o que ele correu no espaço do filtro
     dist_final_prevista_filtro = acumulado_pred[-1] if acumulado_pred else dist_acumulada_atual
 
     return acumulado_pred, dist_final_prevista_filtro
@@ -250,7 +250,7 @@ def executar_ml_ao_vivo(
     # ── Tentar modelo treinado primeiro ──────────────────────────────────────
     # Agora envia o 'periodo' (1 ou 2) para garantir que carrega a versão certa da IA
     modelo_dict = carregar_modelo_treinado(DIRETORIO_ATUAL, metrica_selecionada, periodo)
-    
+
     acumulado_pred = []
 
     if modelo_dict is not None:
