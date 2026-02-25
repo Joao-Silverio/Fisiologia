@@ -204,7 +204,7 @@ for periodo in periodos_para_analise:
         
         # Cria um DataFrame simulado ("congelado" no tempo até o minuto de corte)
         df_atual_corte = df_atual[df_atual[coluna_minuto] <= minuto_corte].copy()
-        
+
         minutos_futuros = []
         pred_superior = []
         pred_inferior = []
@@ -291,6 +291,9 @@ for periodo in periodos_para_analise:
         k3.metric(f"Projeção Final (min {minuto_final_proj})", fmt_dist(carga_projetada))
         k4.metric(f"Ritmo Projetado", fmt_pct(delta_projetado_pct), delta=fmt_pct(delta_projetado_pct), delta_color=cor_delta)
         k5.metric(f"Player Load no Corte", f"{pl_atual_acumulado:.0f}", delta=fmt_pct(delta_pl_pct), delta_color="inverse")
+
+        # ADICIONE ESTA LINHA AQUI PARA AUDITAR:
+        st.write(f"🔍 **Auditoria:** Carga no Corte: {carga_atual:.1f} | Projeção Final (Valor Matemático): {carga_projetada:.1f} | Primeiro valor do array futuro: {acumulado_pred[0] if len(acumulado_pred)>0 else 'N/A'}")
        
         if 'df_recordes' in st.session_state:
             rec = st.session_state['df_recordes']
