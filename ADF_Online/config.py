@@ -8,7 +8,7 @@ ARQUIVO_ORIGINAL = os.path.join(BASE_DIR, 'ADF OnLine 2024.xlsb')
 ARQUIVO_TEMP = 'ADF_TEMP_HOME.xlsb'
 
 # Adicionando o caminho oficial da pasta de modelos
-DIRETORIO_MODELOS = os.path.join(BASE_DIR, 'models')
+DIRETORIO_MODELOS = os.path.join(BASE_DIR, 'Models')
 
 # Adiciona Logo:
 CAMINHO_LOGO = os.path.join(BASE_DIR, 'BarraFC.png')
