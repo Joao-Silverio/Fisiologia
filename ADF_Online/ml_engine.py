@@ -1,6 +1,6 @@
 """
 =====================================================================
-MOTOR ML - VERSÃO 4.0 (MODELOS POR TEMPO + CURVA REAL)
+MOTOR ML - VERSÃO FINAL (ESCALA CORRIGIDA + CURVA DE FADIGA)
 =====================================================================
 """
 
@@ -11,113 +11,66 @@ import pandas as pd
 import config 
 
 def carregar_modelo_treinado(diretorio, metrica_selecionada, periodo):
-    """Carrega o modelo específico baseado na métrica e no PERÍODO (1 ou 2)."""
-    if metrica_selecionada not in config.METRICAS_CONFIG:
-        return None
-        
+    if metrica_selecionada not in config.METRICAS_CONFIG: return None
     nome_base = config.METRICAS_CONFIG[metrica_selecionada]["arquivo_modelo"]
     nome_arquivo = nome_base.replace('.pkl', f'_T{periodo}.pkl')
     caminho = os.path.join(config.DIRETORIO_MODELOS, nome_arquivo)
-    
     try:
-        with open(caminho, 'rb') as f:
-            return pickle.load(f)
-    except FileNotFoundError:
-        return None
+        with open(caminho, 'rb') as f: return pickle.load(f)
+    except FileNotFoundError: return None
 
 def calcular_dias_descanso(df_atleta, jogo_atual):
     datas = sorted(df_atleta['Data'].unique())
     datas_anteriores = [d for d in datas if d < jogo_atual]
-    if not datas_anteriores:
-        return 7 
+    if not datas_anteriores: return 7 
     ultimo_jogo = max(datas_anteriores)
     return min((jogo_atual - ultimo_jogo).days, 30)
 
-def calcular_media_historica_atleta(df_historico, coluna_distancia):
-    if df_historico.empty:
-        return 0
-    return df_historico.groupby('Data')[coluna_distancia].sum().mean()
-
-def calcular_media_por_contexto(df_historico, coluna_distancia, resultado_atual):
-    if 'Resultado' not in df_historico.columns or df_historico.empty:
-        return None
-    df_ctx = df_historico[df_historico['Resultado'] == resultado_atual]
-    if len(df_ctx['Data'].unique()) < 3:
-        return None
-    return df_ctx.groupby('Data')[coluna_distancia].sum().mean()
-
+def fator_fadiga_por_minuto(minuto, minuto_max_periodo=45):
+    # Cria a curvatura natural da fadiga no gráfico (evita a linha reta)
+    progresso = minuto / max(minuto_max_periodo, 1)
+    decaimento = 1.0 - (0.25 * (progresso ** 2))
+    return max(0.50, decaimento)
 
 def projetar_com_modelo_treinado(modelo_dict, row_atleta, minutos_futuros,
-                                 dist_acumulada_atual, minuto_atual, periodo, media_min_geral):
-    """
-    Usa o XGBoost (T1/T2) para prever o volume e distribui usando 
-    a CURVA HISTÓRICA REAL do atleta, garantindo uma linha perfeitamente natural.
-    """
+                                 dist_acumulada_atual, minuto_atual, periodo):
     features = modelo_dict['features']
     modelo = modelo_dict['modelo']
     sample = {f: row_atleta.get(f, 0) for f in features}
     
-    # 1. Alvo do modelo é o final do tempo regulamentar do período
     minuto_final_periodo = 45 if periodo == 1 else 50
     sample['Minutos'] = minuto_final_periodo
     sample_df = pd.DataFrame([sample])[features]
 
-    # Previsão da IA para o final deste tempo (ex: 5000m)
+    # Agora a IA recebe os dados na escala certa e prevê um valor alto e coerente!
     dist_final_prevista = float(modelo.predict(sample_df)[0])
 
-    # 2. Volume restante a percorrer até o fim do período (com trava anti-congelamento)
-    dist_restante_total = dist_final_prevista - dist_acumulada_atual
-    dist_restante_total = max(10, dist_restante_total)
-
-    # 3. Mapear o "formato da curva" usando o histórico real do jogador
-    pesos_filtro = []
-    for m in minutos_futuros:
-        peso = media_min_geral.loc[m] if m in media_min_geral.index else 1.0
-        pesos_filtro.append(max(0.1, peso))
-        
-    soma_pesos_filtro = sum(pesos_filtro) if sum(pesos_filtro) > 0 else 1
+    dist_restante = dist_final_prevista - dist_acumulada_atual
     
-    # Descobrir o peso de TODOS os minutos até o fim do jogo para manter a escala matemática
-    minutos_ate_ofinal = list(range(minuto_atual + 1, minuto_final_periodo + 1))
-    soma_pesos_total = 0
-    for m in minutos_ate_ofinal:
-        p = media_min_geral.loc[m] if m in media_min_geral.index else 1.0
-        soma_pesos_total += max(0.1, p)
-        
-    if soma_pesos_total <= 0: soma_pesos_total = 1
+    # Trava de segurança: se ele estiver batendo recordes, projeta para cima
+    if dist_restante <= 0:
+        ritmo = dist_acumulada_atual / max(minuto_atual, 1)
+        dist_restante = ritmo * len(minutos_futuros) * 0.8
+        dist_final_prevista = dist_acumulada_atual + dist_restante
 
-    # Calcula quanto ele vai percorrer APENAS dentro dos limites do slider 
-    dist_no_filtro = dist_restante_total * (soma_pesos_filtro / soma_pesos_total)
-
-    # 4. Distribuição no gráfico (Cria a curva baseada na realidade)
     acumulado_pred = []
     acum = dist_acumulada_atual
     
-    for peso in pesos_filtro:
-        dist_minuto = dist_no_filtro * (peso / soma_pesos_filtro)
+    # Distribui os metros que faltam copiando o formato da fadiga natural (curva)
+    fatores = [fator_fadiga_por_minuto(m, minuto_final_periodo) for m in minutos_futuros]
+    soma_fatores = sum(fatores) if sum(fatores) > 0 else 1
+
+    for fator in fatores:
+        dist_minuto = dist_restante * (fator / soma_fatores)
         acum += dist_minuto
         acumulado_pred.append(acum)
 
-    # O valor final que aparecerá no KPI
-    projecao_no_limite_do_slider = acumulado_pred[-1] if acumulado_pred else dist_acumulada_atual
-
-    return acumulado_pred, projecao_no_limite_do_slider
-
+    return acumulado_pred, dist_final_prevista
 
 def projetar_fallback_shap(df_historico, coluna_distancia, coluna_acumulada,
                             coluna_minuto, minutos_futuros, carga_atual,
                             minuto_atual, fator_hoje, placar_atual,
-                            media_min_geral, media_min_cenario, peso_placar,
-                            metabolic_power_atual=None):
-    """ Fallback: usa a média histórica mesclada ao fator do jogo de hoje """
-    fator_met_power = 1.0
-    if metabolic_power_atual is not None and metabolic_power_atual > 0:
-        media_met = df_historico['Metabolic Power'].mean() if 'Metabolic Power' in df_historico.columns else metabolic_power_atual
-        if media_met > 0:
-            ratio_met = metabolic_power_atual / media_met
-            fator_met_power = 1.0 - ((ratio_met - 1.0) * 0.15)
-            fator_met_power = np.clip(fator_met_power, 0.85, 1.15)
-
+                            media_min_geral, media_min_cenario, peso_placar):
     acumulado_pred = []
     valor_acum = carga_atual
 
@@ -128,14 +81,11 @@ def projetar_fallback_shap(df_historico, coluna_distancia, coluna_acumulada,
         dist_mesclada = (dist_c * peso_placar) + (dist_g * (1 - peso_placar))
         dist_mesclada = max(0, dist_mesclada)
 
-        # A média histórica (dist_g) já possui o formato natural da curva
-        dist_projetada = dist_mesclada * fator_hoje * fator_met_power
-
+        dist_projetada = dist_mesclada * fator_hoje
         valor_acum += dist_projetada
         acumulado_pred.append(valor_acum)
 
     return acumulado_pred
-
 
 def executar_ml_ao_vivo(
     df_historico, df_atual, df_base,
@@ -150,8 +100,7 @@ def executar_ml_ao_vivo(
         'modelo_usado': 'Sem histórico', 'mae_modelo': None
     }
 
-    if df_historico.empty or df_atual.empty:
-        return resultado
+    if df_historico.empty or df_atual.empty: return resultado
 
     carga_atual       = df_atual[coluna_acumulada].iloc[-1]
     minuto_atual      = int(df_atual[coluna_minuto].iloc[-1])
@@ -159,11 +108,11 @@ def executar_ml_ao_vivo(
 
     minutos_futuros = list(range(minuto_atual + 1, minuto_projecao_ate + 1))
     if not minutos_futuros:
-        resultado['carga_projetada']  = carga_atual
+        resultado['carga_projetada'] = carga_atual
         resultado['minuto_final_proj'] = minuto_atual
         return resultado
 
-    placar_atual  = df_atual['Placar'].iloc[-1]   if 'Placar'    in df_atual.columns else 'N/A'
+    placar_atual  = df_atual['Placar'].iloc[-1] if 'Placar' in df_atual.columns else 'N/A'
     resultado_ctx = df_atual['Resultado'].iloc[-1] if 'Resultado' in df_atual.columns else 'E'
 
     media_min_geral   = df_historico.groupby(coluna_minuto)[coluna_distancia].mean()
@@ -179,62 +128,78 @@ def executar_ml_ao_vivo(
     curva_media_pl   = df_historico.groupby(coluna_minuto)['Player Load Acumulada'].mean() if 'Player Load Acumulada' in df_historico.columns else curva_media_acum
     media_pl_agora   = curva_media_pl.loc[minuto_atual] if minuto_atual in curva_media_pl.index else pl_atual_acumulado
     fator_pl = (pl_atual_acumulado / media_pl_agora) if media_pl_agora > 0 else 1.0
-
     fator_hoje = (fator_alvo * 0.78) + (fator_pl * 0.22)
 
-    met_power_atual = 0.0
-    if 'Metabolic Power' in df_atual.columns:
-        ultimos_5_minutos = df_atual.tail(5) 
-        met_power_atual = ultimos_5_minutos['Metabolic Power'].mean()
-        if np.isnan(met_power_atual):
-             met_power_atual = df_historico['Metabolic Power'].mean() if 'Metabolic Power' in df_historico.columns else 0.0
-
     dias_desc = calcular_dias_descanso(df_historico, pd.to_datetime(jogo_atual_nome)) if hasattr(jogo_atual_nome, 'year') or isinstance(jogo_atual_nome, str) else 7
+
+    # =========================================================================
+    # CORREÇÃO CRÍTICA: RECONSTRUINDO AS FEATURES NA ESCALA CORRETA (POR JOGO)
+    # =========================================================================
+    hia_cols = ['V4 To8 Eff', 'V5 To8 Eff', 'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff']
+    df_historico['HIA'] = df_historico[[c for c in hia_cols if c in df_historico.columns]].sum(axis=1) if any(c in df_historico.columns for c in hia_cols) else 0
+    
+    hs_cols = ['V4 Dist', 'V5 Dist', 'V6 Dist']
+    df_historico['HS_Dist'] = df_historico[[c for c in hs_cols if c in df_historico.columns]].sum(axis=1) if any(c in df_historico.columns for c in hs_cols) else 0
+    
+    sprint_cols = ['V6 Dist', 'V7 Dist', 'V8 Dist']
+    df_historico['Sprint_Dist'] = df_historico[[c for c in sprint_cols if c in df_historico.columns]].sum(axis=1) if any(c in df_historico.columns for c in sprint_cols) else 0
+
+    def soma_jogo(col):
+        if col not in df_historico.columns: return 0
+        return df_historico.groupby(coluna_jogo)[col].sum().mean()
+
+    def soma_jogo_ctx(col, ctx):
+        if col not in df_historico.columns or 'Resultado' not in df_historico.columns: return 0
+        df_c = df_historico[df_historico['Resultado'] == ctx]
+        if df_c.empty: return soma_jogo(col)
+        return df_c.groupby(coluna_jogo)[col].sum().mean()
+
+    media_geral = soma_jogo(coluna_distancia)
+    media_3j = df_historico.groupby(coluna_jogo)[coluna_distancia].sum().tail(3).mean()
+    trend_dist = media_3j / (media_geral + 1) if media_geral > 0 else 1.0
 
     modelo_dict = carregar_modelo_treinado(DIRETORIO_ATUAL, metrica_selecionada, periodo)
     acumulado_pred = []
 
     if modelo_dict is not None:
         row_atleta = {
-            'Minutos':              minuto_atual,
+            'Minutos':              45 if periodo == 1 else 50,
             'Dias_Descanso':        dias_desc,
-            'Media_Dist_Geral':     calcular_media_historica_atleta(df_historico, coluna_distancia),
-            'Media_Dist_Contexto':  calcular_media_por_contexto(df_historico, coluna_distancia, resultado_ctx) or calcular_media_historica_atleta(df_historico, coluna_distancia),
-            'Media_HIA_Geral':      df_historico['HIA'].mean() if 'HIA' in df_historico.columns else 0,
-            'Media_HIA_Contexto':   0,
-            'Media_Load_Geral':     df_historico['Player Load'].sum() / max(df_historico[coluna_jogo].nunique(), 1) if 'Player Load' in df_historico.columns else 0,
-            'Media_HS_Geral':       0,
-            'Media_Sprint_Geral':   0,
-            'Media_HR_Geral':       df_historico['HR_Pct'].mean() if 'HR_Pct' in df_historico.columns else 0,
-            'Media_Load_Contexto':  0,
-            'Carga_3Jogos':         df_historico.groupby(coluna_jogo)['Player Load'].sum().tail(3).sum() if 'Player Load' in df_historico.columns else 0,
-            'Carga_7Jogos':         df_historico.groupby(coluna_jogo)['Player Load'].sum().tail(7).sum() if 'Player Load' in df_historico.columns else 0,
-            'Trend_Dist':           fator_alvo,
             'Diff_Gols':            1 if resultado_ctx == 'V' else (-1 if resultado_ctx == 'D' else 0),
             'N_Jogos':              df_historico[coluna_jogo].nunique(),
-            'Metabolic Power':      met_power_atual or 0,
+            'Media_Dist_Geral':     media_geral,
+            'Media_Load_Geral':     soma_jogo('Player Load'),
+            'Media_HIA_Geral':      soma_jogo('HIA'),
+            'Media_HS_Geral':       soma_jogo('HS_Dist'),
+            'Media_Sprint_Geral':   soma_jogo('Sprint_Dist'),
+            'Media_HR_Geral':       df_historico['HR_Pct'].mean() if 'HR_Pct' in df_historico.columns else 0,
+            'Media_Dist_Contexto':  soma_jogo_ctx(coluna_distancia, resultado_ctx),
+            'Media_HIA_Contexto':   soma_jogo_ctx('HIA', resultado_ctx),
+            'Media_Load_Contexto':  soma_jogo_ctx('Player Load', resultado_ctx),
+            'Carga_3Jogos':         df_historico.groupby(coluna_jogo)['Player Load'].sum().tail(3).sum() if 'Player Load' in df_historico.columns else 0,
+            'Carga_7Jogos':         df_historico.groupby(coluna_jogo)['Player Load'].sum().tail(7).sum() if 'Player Load' in df_historico.columns else 0,
+            'Trend_Dist':           trend_dist,
+            'Metabolic Power':      df_historico['Metabolic Power'].mean() if 'Metabolic Power' in df_historico.columns else 0,
             'Equiv Distance Index': df_historico['Equiv Distance Index'].mean() if 'Equiv Distance Index' in df_historico.columns else 0,
-            'Work Rate Dist':       df_historico['Work Rate Dist'].mean() if 'Work Rate Dist' in df_historico.columns else 0,
+            'Work Rate Dist':       soma_jogo('Work Rate Dist')
         }
 
         try:
-            # Enviamos o periodo e a curva media geral de forma explícita, sem confusão de variáveis!
             acumulado_pred, dist_final_prev = projetar_com_modelo_treinado(
-                modelo_dict, row_atleta, minutos_futuros, carga_atual, minuto_atual, periodo, media_min_geral
+                modelo_dict, row_atleta, minutos_futuros, carga_atual, minuto_atual, periodo
             )
             resultado['modelo_usado'] = f"XGBoost (MAE histórico: {modelo_dict['mae']:.0f}m)"
             resultado['mae_modelo']   = modelo_dict['mae']
         except Exception as e:
             acumulado_pred = []
-            print(f"Modelo treinado falhou: {e}, usando fallback")
+            print(f"Modelo treinado falhou: {e}")
 
     if not acumulado_pred:
         acumulado_pred = projetar_fallback_shap(
             df_historico, coluna_distancia, coluna_acumulada, coluna_minuto, minutos_futuros, carga_atual,
-            minuto_atual, fator_hoje, placar_atual, media_min_geral, media_min_cenario, peso_placar,
-            metabolic_power_atual=met_power_atual
+            minuto_atual, fator_hoje, placar_atual, media_min_geral, media_min_cenario, peso_placar
         )
-        resultado['modelo_usado'] = f"Fallback SHAP (pesos: Dist 78%, PL 22%, MetPow ajustado)"
+        resultado['modelo_usado'] = "Fallback SHAP (Pesos Históricos Ajustados)"
 
     pred_superior = []
     pred_inferior = []
@@ -266,6 +231,6 @@ def executar_ml_ao_vivo(
         'delta_projetado_pct': (fator_proj - 1) * 100, 'delta_time_pct': delta_time_pct,
         'delta_atleta_vs_time': delta_alvo_pct - delta_time_pct, 'placar_atual': placar_atual,
         'peso_placar':         peso_placar,     'fator_hoje':          fator_hoje,
-        'dias_descanso':       dias_desc,       'met_power_atual':     met_power_atual,
+        'dias_descanso':       dias_desc
     })
     return resultado
