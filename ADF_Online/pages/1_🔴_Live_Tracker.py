@@ -8,7 +8,7 @@ import warnings
 from streamlit_autorefresh import st_autorefresh
 from ml_engine import executar_ml_ao_vivo
 import config  
-from PIL import Image # <-- Adicione o PIL aqui também
+from PIL import Image
 
 # 1. Carrega a imagem com segurança
 logo = Image.open(config.CAMINHO_LOGO)
@@ -27,7 +27,7 @@ contador = st_autorefresh(interval=60000, limit=1000, key="live_tracker_refresh"
 col_logo, col_titulo = st.columns([1, 15])
 
 with col_logo:
-    st.image(logo, width=100) # <-- Usa a variável 'logo'
+    st.image(logo, width=100) 
 
 with col_titulo:
     st.title('Live Tracker: Projeção de Carga Física')
@@ -74,7 +74,6 @@ with st.container():
         modo_filtro = st.radio("Prioridade:", ("Focar no Atleta", "Focar no Jogo"), horizontal=True)
         
     with col3:
-        # Puxa a lista de opções de métricas direto do config.py
         opcoes_metricas = list(config.METRICAS_CONFIG.keys())
         metrica_selecionada = st.pills("Métrica:", opcoes_metricas, default="V4 Dist")
         if not metrica_selecionada:
@@ -120,14 +119,12 @@ with st.container():
             if not atleta_selecionado and len(atletas_ordenados) > 0:
                 atleta_selecionado = atletas_ordenados[0]
 
-    # Recupera a data original escondida
     if jogo_selecionado_display:
         jogo_selecionado = df_base[df_base['Data_Display'] == jogo_selecionado_display]['Data'].iloc[0]
     else:
         st.warning("Nenhum dado encontrado para o(s) campeonato(s) selecionado(s).")
         st.stop()
     
-    # --- PUXANDO AS CONFIGURAÇÕES DO CONFIG.PY ---
     cfg = config.METRICAS_CONFIG[metrica_selecionada]
     coluna_distancia = cfg["coluna_distancia"]
     coluna_acumulada = cfg["coluna_acumulada"]
@@ -146,7 +143,6 @@ for periodo in periodos_para_analise:
     st.markdown(f"### ⏱️ Análise Fisiológica - {periodo}º Tempo")
 
     df_periodo = df_atleta[df_atleta['Período'] == periodo].copy()
-
     df_periodo = df_periodo.sort_values(by=[coluna_jogo, coluna_minuto])
     
     # Calcular o Acumulado (Garante que cada tempo comece do zero)
@@ -178,26 +174,45 @@ for periodo in periodos_para_analise:
         minuto_atual_max = int(max_minutos_por_jogo[jogo_atual_nome])
         minuto_final_partida = int(max_minutos_por_jogo.max())
         
-        minuto_projecao_ate = st.slider(
-            f"Projetar o {periodo}º Tempo até o minuto:",
-            min_value=minuto_atual_max,
-            max_value=max(minuto_final_partida, minuto_atual_max + 1),
-            value=minuto_final_partida,
-            step=1,
-            key=f"slider_projecao_{periodo}" 
-        ) 
+        # --- A NOVA LÓGICA DE SIMULAÇÃO DO "AGORA" (MINUTO DE CORTE) ---
+        col_s1, col_s2 = st.columns(2)
+        
+        with col_s1:
+            minuto_corte = st.slider(
+                f"⏱️ Simular o 'Agora' (Minuto de Corte):",
+                min_value=1,
+                max_value=minuto_atual_max,
+                value=minuto_atual_max, # Por padrão fica no fim (tempo real)
+                step=1,
+                help="Volte no tempo para ver qual era a projeção da IA naquele minuto. Útil para ver se o atleta caiu de rendimento em relação ao que se esperava.",
+                key=f"slider_corte_{periodo}"
+            )
+            
+        with col_s2:
+            minuto_projecao_ate = st.slider(
+                f"🚀 Projetar o {periodo}º Tempo até o minuto:",
+                min_value=minuto_corte,
+                max_value=max(minuto_final_partida, minuto_corte + 1, 45 if periodo == 1 else 50),
+                value=max(minuto_final_partida, 45 if periodo == 1 else 50),
+                step=1,
+                key=f"slider_projecao_{periodo}" 
+            ) 
 
         df_historico = df[df[coluna_jogo] != jogo_atual_nome].copy()
         df_atual = df[df[coluna_jogo] == jogo_atual_nome].sort_values(coluna_minuto)
+        
+        # Cria um DataFrame simulado ("congelado" no tempo até o minuto de corte) para alimentar a IA
+        df_atual_corte = df_atual[df_atual[coluna_minuto] <= minuto_corte].copy()
 
         minutos_futuros = []
         pred_superior = []
         pred_inferior = []
         acumulado_pred = []
         
-        carga_atual = df_atual[coluna_acumulada].iloc[-1] if not df_atual.empty else 0
-        minuto_atual = df_atual[coluna_minuto].iloc[-1] if not df_atual.empty else 0
-        pl_atual_acumulado = df_atual['Player Load Acumulada'].iloc[-1] if 'Player Load Acumulada' in df_atual.columns and not df_atual.empty else 1
+        # As métricas numéricas extraem dados a partir do recorte "Simulado", não do fim do jogo
+        carga_atual = df_atual_corte[coluna_acumulada].iloc[-1] if not df_atual_corte.empty else 0
+        minuto_atual = df_atual_corte[coluna_minuto].iloc[-1] if not df_atual_corte.empty else 0
+        pl_atual_acumulado = df_atual_corte['Player Load Acumulada'].iloc[-1] if 'Player Load Acumulada' in df_atual_corte.columns and not df_atual_corte.empty else 1
         
         carga_projetada = carga_atual
         minuto_final_proj = minuto_atual
@@ -212,8 +227,8 @@ for periodo in periodos_para_analise:
             col_placar = 'Placar'
             media_min_geral = df_historico.groupby(coluna_minuto)[coluna_distancia].mean()
             
-            if col_placar in df_atual.columns and col_placar in df_historico.columns:
-                placar_atual = df_atual[col_placar].iloc[-1]
+            if col_placar in df_atual_corte.columns and col_placar in df_historico.columns:
+                placar_atual = df_atual_corte[col_placar].iloc[-1] if not df_atual_corte.empty else "N/A"
                 df_hist_cenario = df_historico[df_historico[col_placar] == placar_atual]
                 
                 if not df_hist_cenario.empty:
@@ -222,14 +237,14 @@ for periodo in periodos_para_analise:
                 else:
                     media_min_cenario = media_min_geral
                     peso_placar = 0.0
-                    placar_atual = "Sem dados prévios"
             else:
                 media_min_cenario = media_min_geral
                 peso_placar = 0.0
                 placar_atual = "Coluna não encontrada"
                 
+            # Aqui passamos o dataframe "congelado" (df_atual_corte) para a IA simular
             ml = executar_ml_ao_vivo(
-                df_historico, df_atual, df_base,
+                df_historico, df_atual_corte, df_base,
                 coluna_distancia, coluna_acumulada, coluna_minuto, coluna_jogo,
                 jogo_atual_nome, periodo, minuto_projecao_ate, metrica_selecionada,
                 atleta_selecionado, DIRETORIO_ATUAL
@@ -247,14 +262,13 @@ for periodo in periodos_para_analise:
             delta_time_pct        = ml['delta_time_pct']
             delta_atleta_vs_time  = ml['delta_atleta_vs_time']
 
-            # Usa o .get() para evitar KeyErrors quando o slider estiver no mínimo
             met_pow = ml.get('met_power_atual')
             placar = ml.get('placar_atual', 'N/A')
             descanso = ml.get('dias_descanso', '-')
             modelo = ml.get('modelo_usado', 'Sem IA')
             
             if met_pow is not None:
-                st.info(f"🧠 **{modelo}** | Placar: '{placar}' | Descanso: {descanso}d | MetPow: {met_pow:.1f}")
+                st.info(f"🧠 **{modelo}** | Placar no momento do corte: '{placar}' | Descanso: {descanso}d | MetPow: {met_pow:.1f}")
             else:
                 st.info(f"🧠 **{modelo}**")
 
@@ -270,50 +284,54 @@ for periodo in periodos_para_analise:
         k0, k1, k2, k3, k4, k5, k6 = st.columns(7)
         cor_delta = "normal" if metrica_selecionada in ["V4 Dist", "HIA", "Total Distance"] else "inverse"
         
-        k0.metric("Volume Atual", fmt_dist(carga_atual))
-        k1.metric("Desempenho vs Histórico", fmt_pct(delta_alvo_pct), delta=fmt_pct(delta_alvo_pct), delta_color=cor_delta)
-        k2.metric("Ritmo vs Média Equipe", fmt_pct(delta_time_pct), delta=f"{fmt_pct(delta_atleta_vs_time)} (Atleta vs Jogo)", delta_color=cor_delta)
+        k0.metric("Volume no Corte", fmt_dist(carga_atual))
+        k1.metric("Ritmo até o Corte vs Histórico", fmt_pct(delta_alvo_pct), delta=fmt_pct(delta_alvo_pct), delta_color=cor_delta)
+        k2.metric("Ritmo até o Corte vs Equipe", fmt_pct(delta_time_pct), delta=f"{fmt_pct(delta_atleta_vs_time)} (Atleta vs Jogo)", delta_color=cor_delta)
         k3.metric(f"Projeção Final (min {minuto_final_proj})", fmt_dist(carga_projetada))
-        k4.metric(f"Ritmo Previsto", fmt_pct(delta_projetado_pct), delta=fmt_pct(delta_projetado_pct), delta_color=cor_delta)
-        k5.metric(f"Player Load", f"{pl_atual_acumulado:.0f}", delta=fmt_pct(delta_pl_pct), delta_color="inverse")
+        k4.metric(f"Ritmo Projetado", fmt_pct(delta_projetado_pct), delta=fmt_pct(delta_projetado_pct), delta_color=cor_delta)
+        k5.metric(f"Player Load no Corte", f"{pl_atual_acumulado:.0f}", delta=fmt_pct(delta_pl_pct), delta_color="inverse")
        
         if 'df_recordes' in st.session_state:
             rec = st.session_state['df_recordes']
             recorde_atleta = rec[rec['Name'] == atleta_selecionado]['Recorde_5min_HIA'].values
             val_recorde = recorde_atleta[0] if len(recorde_atleta) > 0 else 0
             
-            esforço_atual_5m = df_atual[coluna_distancia].tail(5).mean()
+            # Esforço calculado a partir dos últimos 5 min do momento simulado
+            esforço_atual_5m = df_atual_corte[coluna_distancia].tail(5).mean() if not df_atual_corte.empty else 0
             percentual_do_limite = (esforço_atual_5m / val_recorde * 100) if val_recorde > 0 else 0
         
             k6.metric(
-                label="Proximidade do Limite (5 min)",
+                label="Proximidade Limite (5 min)",
                 value=f"{percentual_do_limite:.1f}%",
                 delta=f"Recorde: {val_recorde:.1f}",
-                help="Compara a intensidade dos últimos 5 minutos com o bloco mais intenso que este atleta já fez na temporada."
+                help="Compara a intensidade dos últimos 5 minutos no momento simulado com o recorde do atleta na temporada."
             )
 
         fig = go.Figure()
         
+        # Linhas do passado (Histórico)
         if not df_historico.empty:
             jogos_historicos = df_historico[coluna_jogo].unique()
-            colors = px.colors.qualitative.Plotly
+            colors = px.colors.qualitative.Pastel # Usando cores mais suaves para o fundo
             for idx, jogo in enumerate(jogos_historicos):
                 df_j = df_historico[df_historico[coluna_jogo] == jogo].sort_values(coluna_minuto)
                 jogo_display = df_completo[df_completo['Data'] == jogo]['Data_Display'].iloc[0] if jogo in df_completo['Data'].values else str(jogo)
                 fig.add_trace(go.Scatter(
                     x=df_j[coluna_minuto], y=df_j[coluna_acumulada], mode='lines',
-                    name=jogo_display, opacity=0.3,
-                    line=dict(color=colors[idx % len(colors)], dash='dot', width=1.5),
-                    hovertemplate='Valor: %{y:.1f}<extra></extra>'
+                    name=jogo_display, opacity=0.45, # Aumentamos a opacidade para ver melhor
+                    line=dict(color=colors[idx % len(colors)], width=2.5), # Tiramos o pontilhado e deixamos mais espessa
+                    hovertemplate=f'<b>{jogo_display}</b><br>Valor: %{{y:.1f}}m<extra></extra>' # Mostra o nome do jogo ao passar o mouse na linha
                 ))
 
+        # PLOTA A LINHA VERDE COMPLETA (O QUE ELE REALMENTE FEZ NO JOGO TODO)
         jogo_display = df_completo[df_completo['Data'] == jogo_atual_nome]['Data_Display'].iloc[0] if jogo_atual_nome in df_completo['Data'].values else str(jogo_atual_nome)
         fig.add_trace(go.Scatter(
             x=df_atual[coluna_minuto], y=df_atual[coluna_acumulada], mode='lines',
-            name=f'{jogo_display} (Atual)', line=dict(color='#00E676', width=4), 
-            hovertemplate='Atual: %{y:.1f}m<extra></extra>'
+            name=f'{jogo_display} (Realizado)', line=dict(color='#00E676', width=4), 
+            hovertemplate='Realizado: %{y:.1f}m<extra></extra>'
         ))
 
+        # PLOTA A PROJEÇÃO QUE COMEÇA DO PONTO DE CORTE
         if len(minutos_futuros) > 0 and len(pred_superior) > 0: 
             fig.add_trace(go.Scatter(x=minutos_futuros, y=pred_superior, mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'))
             fig.add_trace(go.Scatter(
@@ -321,11 +339,13 @@ for periodo in periodos_para_analise:
                 fill='tonexty', fillcolor='rgba(255, 140, 0, 0.15)', name='Margem de Variação', hoverinfo='skip'
             ))
             fig.add_trace(go.Scatter(
-                x=minutos_futuros, y=acumulado_pred, mode='lines', name='Projeção com ML',
+                x=minutos_futuros, y=acumulado_pred, mode='lines', name='Projeção a partir do Corte',
                 line=dict(color='#FF8C00', width=3, dash='dash'), hovertemplate='Projeção: %{y:.1f}m<extra></extra>'
             ))
-            fig.add_vline(x=minuto_atual, line_dash="dash", line_color="gray")
-            fig.add_annotation(x=minuto_atual, y=1, text="Agora", showarrow=False, yref="paper", xanchor="left", yanchor="top")
+            
+            # Linha vertical vermelha indicando onde a IA fez a projeção
+            fig.add_vline(x=minuto_atual, line_dash="dash", line_color="#E53935")
+            fig.add_annotation(x=minuto_atual, y=carga_atual, text=" Ponto de Corte", showarrow=False, yref="y", xanchor="left", yanchor="bottom", font=dict(color="#E53935"))
 
         x_min = 0
         x_max = minuto_projecao_ate + 2  
