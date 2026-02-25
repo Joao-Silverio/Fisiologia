@@ -638,7 +638,7 @@ import pickle
 import pickle
 
 # Define o caminho da pasta models e cria ela se não existir
-DIRETORIO_MODELOS = os.path.join(DIRETORIO_ATUAL, 'models')
+DIRETORIO_MODELOS = os.path.join(DIRETORIO_ATUAL, 'Models')
 os.makedirs(DIRETORIO_MODELOS, exist_ok=True)
 
 print("\n[EXPORTAÇÃO] Salvando modelos para a aplicação Web na pasta 'models'...")
