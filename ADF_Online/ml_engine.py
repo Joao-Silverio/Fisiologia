@@ -222,9 +222,16 @@ def executar_ml_ao_vivo(
     fator_hoje = (fator_alvo * 0.78) + (fator_pl * 0.22)
 
     # ── Metabolic Power atual (2ª feature mais importante no SHAP) ───────────
-    met_power_atual = None
+    # Em vez de média geral do jogo, puxamos a média apenas até o momento do CORTE
+    met_power_atual = 0.0
     if 'Metabolic Power' in df_atual.columns:
-        met_power_atual = df_atual['Metabolic Power'].mean()
+        # Pega a média dos últimos 5 minutos ANTES do corte, se possível
+        ultimos_5_minutos = df_atual.tail(5) 
+        met_power_atual = ultimos_5_minutos['Metabolic Power'].mean()
+        
+        # Se mesmo assim der nulo (NaN), substitui pela média histórica para não bugar o XGBoost
+        if np.isnan(met_power_atual):
+             met_power_atual = df_historico['Metabolic Power'].mean() if 'Metabolic Power' in df_historico.columns else 0.0
 
     # ── Dias de descanso ─────────────────────────────────────────────────────
     dias_desc = calcular_dias_descanso(
