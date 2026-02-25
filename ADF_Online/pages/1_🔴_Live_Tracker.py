@@ -174,26 +174,37 @@ for periodo in periodos_para_analise:
         minuto_atual_max = int(max_minutos_por_jogo[jogo_atual_nome])
         minuto_final_partida = int(max_minutos_por_jogo.max())
         
-        # --- A NOVA LÓGICA DE SIMULAÇÃO DO "AGORA" (MINUTO DE CORTE) ---
-        minuto_corte = st.slider(
-            f"⏱️ Simular o 'Agora' (Minuto de Corte):",
-            min_value=1,
-            max_value=minuto_atual_max,
-            value=minuto_atual_max, 
-            step=1,
-            help="💡 DICA: Clique diretamente no número acima da barra para digitar o minuto exato no teclado!",
-            key=f"slider_corte_{periodo}"
-        )
+        # --- A NOVA LÓGICA DE SIMULAÇÃO (2 SLIDERS) ---
+        col_s1, col_s2 = st.columns(2)
         
-        # Define automaticamente o final da projeção nos bastidores
-        minuto_projecao_ate = max(minuto_final_partida, 45 if periodo == 1 else 50)
+        with col_s1:
+            minuto_corte = st.slider(
+                f"⏱️ Início da Previsão (Corte):",
+                min_value=1,
+                max_value=minuto_atual_max,
+                value=minuto_atual_max, # Começa no minuto real atual
+                step=1,
+                help="Define o momento onde os dados reais (verde) param e a Inteligência Artificial (laranja) começa a agir.",
+                key=f"slider_corte_{periodo}"
+            )
+            
+        with col_s2:
+            minuto_projecao_ate = st.slider(
+                f"🚀 Fim da Previsão (Projetar até):",
+                min_value=minuto_corte, # A previsão não pode terminar antes de começar!
+                max_value=max(minuto_final_partida, minuto_corte + 1, 45 if periodo == 1 else 50),
+                value=max(minuto_final_partida, 45 if periodo == 1 else 50),
+                step=1,
+                help="Até que minuto do jogo a linha tracejada deve ir?",
+                key=f"slider_projecao_{periodo}" 
+            ) 
         
         df_historico = df[df[coluna_jogo] != jogo_atual_nome].copy()
         df_atual = df[df[coluna_jogo] == jogo_atual_nome].sort_values(coluna_minuto)
         
         # Cria um DataFrame simulado ("congelado" no tempo até o minuto de corte)
-        df_atual_corte = df_atual[df_atual[coluna_minuto] <= minuto_corte].copy()       
-
+        df_atual_corte = df_atual[df_atual[coluna_minuto] <= minuto_corte].copy()
+        
         minutos_futuros = []
         pred_superior = []
         pred_inferior = []
