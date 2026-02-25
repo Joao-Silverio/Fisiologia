@@ -175,25 +175,20 @@ for periodo in periodos_para_analise:
         minuto_final_partida = int(max_minutos_por_jogo.max())
         
         # --- A NOVA LÓGICA DE SIMULAÇÃO DO "AGORA" (MINUTO DE CORTE) ---
-        
-        # 1. Chaves únicas para os componentes baseadas no período
         key_slider = f"slider_corte_{periodo}"
         key_num = f"num_corte_{periodo}"
 
-        # 2. Inicializa os valores na memória do sistema (session_state) se for a primeira vez
         if key_slider not in st.session_state:
             st.session_state[key_slider] = minuto_atual_max
         if key_num not in st.session_state:
             st.session_state[key_num] = minuto_atual_max
 
-        # 3. Funções "Callbacks" para sincronizar a barra e a caixinha
         def atualizar_caixinha():
             st.session_state[key_num] = st.session_state[key_slider]
             
         def atualizar_barra():
             st.session_state[key_slider] = st.session_state[key_num]
 
-        # 4. Cria duas colunas: uma larga (80%) para a barra, uma estreita (20%) para a caixinha
         col_barra, col_caixa = st.columns([4, 1])
         
         with col_barra:
@@ -204,7 +199,7 @@ for periodo in periodos_para_analise:
                 step=1,
                 help="Volte no tempo para auditar o ritmo do atleta.",
                 key=key_slider,
-                on_change=atualizar_caixinha # Avisa a caixinha quando a barra mexer
+                on_change=atualizar_caixinha
             )
             
         with col_caixa:
@@ -214,16 +209,18 @@ for periodo in periodos_para_analise:
                 max_value=minuto_atual_max,
                 step=1,
                 key=key_num,
-                on_change=atualizar_barra # Avisa a barra quando a caixinha mexer
+                on_change=atualizar_barra
             )
             
-        # 5. O minuto de corte final que vai alimentar a IA
+        # Esta é a variável que estava faltando!
         minuto_corte = st.session_state[key_slider]
         
-        # Define automaticamente o final da projeção nos bastidores (45 min ou 50 min)
         minuto_projecao_ate = max(minuto_final_partida, 45 if periodo == 1 else 50)
         
-        # Cria um DataFrame simulado ("congelado" no tempo até o minuto de corte) para alimentar a IA
+        df_historico = df[df[coluna_jogo] != jogo_atual_nome].copy()
+        df_atual = df[df[coluna_jogo] == jogo_atual_nome].sort_values(coluna_minuto)
+        
+        # Cria um DataFrame simulado ("congelado" no tempo até o minuto de corte)
         df_atual_corte = df_atual[df_atual[coluna_minuto] <= minuto_corte].copy()
 
         minutos_futuros = []
