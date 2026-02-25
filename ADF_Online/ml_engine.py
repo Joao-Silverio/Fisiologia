@@ -79,32 +79,41 @@ def fator_fadiga_por_minuto(minuto, minuto_max_periodo=45):
 
 
 def projetar_com_modelo_treinado(modelo_dict, row_atleta, minutos_futuros,
-                                  dist_acumulada_atual, minuto_atual):
+                                 dist_acumulada_atual, minuto_atual, minuto_final_alvo):
     """
     Usa o XGBoost treinado para projetar a distância final.
-    Interpola linearmente entre o acumulado atual e a previsão do modelo.
+    Distribui o restante proporcionalmente para criar uma curva realista sem perder volume.
     """
     features  = modelo_dict['features']
     modelo    = modelo_dict['modelo']
 
     sample = {f: row_atleta.get(f, 0) for f in features}
-    sample['Minutos'] = 90  # prever o jogo completo
+    
+    # CORREÇÃO 1: Prever até o fim do período atual (ex: 45 ou 50), não 90!
+    sample['Minutos'] = minuto_final_alvo
     sample_df = pd.DataFrame([sample])[features]
 
     dist_final_prevista = float(modelo.predict(sample_df)[0])
 
-    # Distribui linearmente entre acumulado atual e o total previsto
+    # CORREÇÃO 2: Se o atleta estiver "voando" e já correu mais do que a IA previa, 
+    # não podemos travar o gráfico. Ajustamos a projeção para cima!
+    if dist_final_prevista <= dist_acumulada_atual:
+        fator_trend = row_atleta.get('Trend_Dist', 1.0)
+        dist_extra = (dist_acumulada_atual / max(minuto_atual, 1)) * len(minutos_futuros) * fator_trend
+        dist_final_prevista = dist_acumulada_atual + dist_extra
+
     dist_restante = max(0, dist_final_prevista - dist_acumulada_atual)
-    minutos_restantes = max(1, len(minutos_futuros))
 
     acumulado_pred = []
     acum = dist_acumulada_atual
 
-    for i, m in enumerate(minutos_futuros):
-        progresso = (i + 1) / minutos_restantes
-        # Aplica fator de fadiga: ritmo não é constante, cai no fim
-        fator = fator_fadiga_por_minuto(m)
-        dist_este_minuto = (dist_restante / minutos_restantes) * fator
+    # CORREÇÃO 3: Curva de fadiga suave que NÃO encolhe o volume total prometido
+    fatores = [fator_fadiga_por_minuto(m) for m in minutos_futuros]
+    soma_fatores = sum(fatores) if sum(fatores) > 0 else 1
+
+    for m, fator in zip(minutos_futuros, fatores):
+        # A divisão matemática garante que 100% da dist_restante será distribuída
+        dist_este_minuto = dist_restante * (fator / soma_fatores)
         acum += dist_este_minuto
         acumulado_pred.append(acum)
 
@@ -143,13 +152,12 @@ def projetar_fallback_shap(df_historico, coluna_distancia, coluna_acumulada,
         dist_g = media_min_geral.loc[m]   if m in media_min_geral.index   else 0
         dist_c = media_min_cenario.loc[m] if m in media_min_cenario.index else dist_g
 
-        # Mescla cenário tático + geral (pesos do SHAP: contexto tem ~6% do SHAP)
         dist_mesclada = (dist_c * peso_placar) + (dist_g * (1 - peso_placar))
         dist_mesclada = max(0, dist_mesclada)
 
-        # Aplica fator do atleta hoje + fadiga dinâmica + metabolic power
-        fator_fadiga  = fator_fadiga_por_minuto(m)
-        dist_projetada = dist_mesclada * fator_hoje * fator_fadiga * fator_met_power
+        # CORREÇÃO 4: A média histórica (dist_g) JÁ POSSUI a fadiga embutida.
+        # Multiplicar por fator_fadiga aqui criava a "Dupla Penalização" que afundava o gráfico!
+        dist_projetada = dist_mesclada * fator_hoje * fator_met_power
 
         valor_acum += dist_projetada
         acumulado_pred.append(valor_acum)
@@ -273,8 +281,9 @@ def executar_ml_ao_vivo(
         }
 
         try:
+            # Agora enviamos o minuto_projecao_ate corretamente para a IA!
             acumulado_pred, dist_final_prev = projetar_com_modelo_treinado(
-                modelo_dict, row_atleta, minutos_futuros, carga_atual, minuto_atual
+                modelo_dict, row_atleta, minutos_futuros, carga_atual, minuto_atual, minuto_projecao_ate
             )
             resultado['modelo_usado'] = f"XGBoost (MAE histórico: {modelo_dict['mae']:.0f}m)"
             resultado['mae_modelo']   = modelo_dict['mae']
