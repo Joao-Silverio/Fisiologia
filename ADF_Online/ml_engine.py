@@ -1,6 +1,6 @@
 """
 =====================================================================
-MOTOR ML - ARQUITETURA SNAPSHOT (A PAR COM O NOVO PREDICTIVE.PY)
+MOTOR ML - ARQUITETURA SNAPSHOT (CURVA REAL DO ATLETA)
 =====================================================================
 """
 import os
@@ -35,14 +35,12 @@ def calcular_dias_descanso(df_atleta, jogo_atual):
     ultimo_jogo = max(datas_anteriores)
     return min((jogo_atual - ultimo_jogo).days, 30)
 
-def fator_fadiga_por_minuto(minuto, minuto_max_periodo=45):
-    # Apenas para a linha no gráfico ficar levemente curvada e natural
-    progresso = minuto / max(minuto_max_periodo, 1)
-    decaimento = 1.0 - (0.25 * (progresso ** 2))
-    return max(0.50, decaimento)
-
 def projetar_com_modelo_treinado(modelo_dict, row_atleta, minutos_futuros,
-                                 dist_acumulada_atual, minuto_atual, periodo):
+                                 dist_acumulada_atual, media_min_geral):
+    """
+    1. A IA dita o destino final.
+    2. A variável `media_min_geral` dita o caminho real com a assinatura do atleta.
+    """
     features = modelo_dict['features']
     modelo = modelo_dict['modelo']
     
@@ -50,22 +48,25 @@ def projetar_com_modelo_treinado(modelo_dict, row_atleta, minutos_futuros,
     sample = {f: row_atleta.get(f, 0) for f in features}
     sample_df = pd.DataFrame([sample])[features]
 
-    # A IA PREVÊ O FINAL (Sabendo em que minuto estamos e o que já foi corrido)
+    # PREVISÃO DA IA (O Destino Final)
     dist_final_prevista = float(modelo.predict(sample_df)[0])
 
     # O que falta correr (Trava simples da física: nunca menor que zero)
     dist_restante = max(0.0, dist_final_prevista - dist_acumulada_atual)
 
-    # Distribuição curva até ao fim para o gráfico ficar bonito
+    # DISTRIBUIÇÃO USANDO O HISTÓRICO REAL (A MÁGICA VISUAL)
     acumulado_pred = []
     acum = dist_acumulada_atual
     
-    minuto_final_periodo = 45 if periodo == 1 else 50
-    fatores = [fator_fadiga_por_minuto(m, minuto_final_periodo) for m in minutos_futuros]
-    soma_fatores = sum(fatores) if sum(fatores) > 0 else 1
+    pesos_historicos = []
+    for m in minutos_futuros:
+        peso = media_min_geral.loc[m] if m in media_min_geral.index else 1.0
+        pesos_historicos.append(max(0.01, peso))
 
-    for fator in fatores:
-        dist_minuto = dist_restante * (fator / soma_fatores)
+    soma_pesos = sum(pesos_historicos) if sum(pesos_historicos) > 0 else 1
+
+    for peso in pesos_historicos:
+        dist_minuto = dist_restante * (peso / soma_pesos)
         acum += dist_minuto
         acumulado_pred.append(acum)
 
@@ -115,11 +116,13 @@ def executar_ml_ao_vivo(
     if 'HIA' not in df_historico.columns:
         df_historico['HIA'] = df_historico[[c for c in hia_cols if c in df_historico.columns]].sum(axis=1) if any(c in df_historico.columns for c in hia_cols) else 0
 
-    media_geral = soma_jogo(coluna_distancia)
+    media_geral_num = soma_jogo(coluna_distancia)
     media_3j = df_historico.groupby(coluna_jogo)[coluna_distancia].sum().tail(3).mean()
-    trend_dist = media_3j / (media_geral + 1) if media_geral > 0 else 1.0
-
+    trend_dist = media_3j / (media_geral_num + 1) if media_geral_num > 0 else 1.0
     carga_3jogos_pl = df_historico.groupby(coluna_jogo)['Player Load'].sum().tail(3).sum() if 'Player Load' in df_historico.columns else 0
+
+    # CURVA REAL MINUTO A MINUTO (O MAPA DO ATLETA)
+    media_min_geral = df_historico.groupby(coluna_minuto)[coluna_distancia].mean()
 
     modelo_dict = carregar_modelo_treinado(DIRETORIO_ATUAL, metrica_selecionada, periodo)
     acumulado_pred = []
@@ -133,13 +136,14 @@ def executar_ml_ao_vivo(
             'Carga_3Jogos_PL': carga_3jogos_pl,
             'Diff_Gols': 1 if resultado_ctx == 'V' else (-1 if resultado_ctx == 'D' else 0),
             f'{metric_target}_Acumulado_Agora': carga_atual,
-            f'Media_Geral_{metric_target}': media_geral,
+            f'Media_Geral_{metric_target}': media_geral_num,
             f'Trend_{metric_target}': trend_dist
         }
 
         try:
+            # Enviamos a 'media_min_geral' para o gráfico ser realista e orgânico
             acumulado_pred, dist_final_prev = projetar_com_modelo_treinado(
-                modelo_dict, row_atleta, minutos_futuros, carga_atual, minuto_atual, periodo
+                modelo_dict, row_atleta, minutos_futuros, carga_atual, media_min_geral
             )
             resultado['modelo_usado'] = f"XGBoost Snapshot (MAE: {modelo_dict['mae']:.1f})"
             resultado['mae_modelo']   = modelo_dict['mae']
@@ -149,7 +153,6 @@ def executar_ml_ao_vivo(
 
     # Fallback simples de emergência
     if not acumulado_pred:
-        media_min_geral = df_historico.groupby(coluna_minuto)[coluna_distancia].mean()
         curva_media_acum = df_historico.groupby(coluna_minuto)[coluna_acumulada].mean()
         media_acum_agora = curva_media_acum.loc[minuto_atual] if minuto_atual in curva_media_acum.index else carga_atual
         fator_alvo = (carga_atual / media_acum_agora) if media_acum_agora > 0 else 1.0

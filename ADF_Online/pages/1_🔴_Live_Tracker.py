@@ -174,30 +174,52 @@ for periodo in periodos_para_analise:
         minuto_atual_max = int(max_minutos_por_jogo[jogo_atual_nome])
         minuto_final_partida = int(max_minutos_por_jogo.max())
         
-        # --- A NOVA LÓGICA DE SIMULAÇÃO (2 SLIDERS) ---
+        # --- A NOVA LÓGICA DE SIMULAÇÃO (2 SLIDERS INDEPENDENTES) ---
         col_s1, col_s2 = st.columns(2)
         
+        # Criamos chaves fixas para este período
+        key_corte = f"slider_corte_memoria_{periodo}"
+        key_proj = f"slider_projecao_memoria_{periodo}"
+        
+        teto_maximo = max(minuto_final_partida, 45 if periodo == 1 else 50)
+        
+        # Inicializa a memória se for a primeira vez que abre a página
+        if key_corte not in st.session_state:
+            st.session_state[key_corte] = minuto_atual_max
+        if key_proj not in st.session_state:
+            st.session_state[key_proj] = teto_maximo
+
         with col_s1:
             minuto_corte = st.slider(
                 f"⏱️ Início da Previsão (Corte):",
                 min_value=1,
                 max_value=minuto_atual_max,
-                value=minuto_atual_max, # Começa no minuto real atual
+                value=st.session_state[key_corte], 
                 step=1,
                 help="Define o momento onde os dados reais (verde) param e a Inteligência Artificial (laranja) começa a agir.",
-                key=f"slider_corte_{periodo}"
+                key=key_corte
             )
             
         with col_s2:
+            # Se o utilizador puxar o slider de corte para um minuto superior ao de projeção, 
+            # ajustamos a projeção para não dar erro matemático.
+            val_proj_atual = st.session_state[key_proj]
+            if val_proj_atual < minuto_corte:
+                val_proj_atual = minuto_corte
+
             minuto_projecao_ate = st.slider(
                 f"🚀 Fim da Previsão (Projetar até):",
-                min_value=minuto_corte, # A previsão não pode terminar antes de começar!
-                max_value=max(minuto_final_partida, minuto_corte + 1, 45 if periodo == 1 else 50),
-                value=max(minuto_final_partida, 45 if periodo == 1 else 50),
+                min_value=1, # Fixamos em 1 para o Streamlit não reiniciar o widget sozinho
+                max_value=teto_maximo,
+                value=val_proj_atual,
                 step=1,
                 help="Até que minuto do jogo a linha tracejada deve ir?",
-                key=f"slider_projecao_{periodo}" 
+                key=key_proj 
             ) 
+            
+        # Trava lógica invisível: se o final for menor que o início, a IA simplesmente não projeta futuro
+        if minuto_projecao_ate < minuto_corte:
+            minuto_projecao_ate = minuto_corte
         
         df_historico = df[df[coluna_jogo] != jogo_atual_nome].copy()
         df_atual = df[df[coluna_jogo] == jogo_atual_nome].sort_values(coluna_minuto)
