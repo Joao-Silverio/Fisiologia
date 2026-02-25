@@ -79,8 +79,6 @@ with st.container():
         if not metrica_selecionada:
             metrica_selecionada = "V4 Dist"
             
-    with col4:
-        ordem_graficos = st.radio("Ordem na Tela:", ("1º Tempo no Topo", "2º Tempo no Topo"), horizontal=True)
 
     # ================= LÓGICA DE FILTRAGEM =================
     jogo_selecionado_display = None
@@ -134,32 +132,41 @@ with st.container():
     df_atleta = df_base[df_base['Name'] == atleta_selecionado].copy()
 
 # =====================================================================
-# 4. MOTOR DE GERAÇÃO DOS GRÁFICOS E ML (1º e 2º TEMPO)
+# 4. MOTOR DE GERAÇÃO DOS GRÁFICOS E ML (1º e 2º TEMPO EM ABAS)
 # =====================================================================
-periodos_para_analise = [1, 2] if ordem_graficos == "1º Tempo no Topo" else [2, 1]
 
-for periodo in periodos_para_analise:
-    
-    st.markdown(f"### ⏱️ Análise Fisiológica - {periodo}º Tempo")
+# 1. Criamos as duas abas visualmente no painel
+aba_t1, aba_t2 = st.tabs(["⏱️ 1º Tempo", "⏱️ 2º Tempo"])
 
-    df_periodo = df_atleta[df_atleta['Período'] == periodo].copy()
-    df_periodo = df_periodo.sort_values(by=[coluna_jogo, coluna_minuto])
+# 2. Criamos um "mapa" para o código saber qual aba pertence a qual período
+mapa_abas = {1: aba_t1, 2: aba_t2}
+
+# 3. Iteramos fixamente pelos períodos 1 e 2
+for periodo in [1, 2]:
     
-    # Calcular o Acumulado (Garante que cada tempo comece do zero)
-    if 'Total Distance' in df_periodo.columns:
-        df_periodo['Dist Acumulada'] = df_periodo.groupby(coluna_jogo)['Total Distance'].cumsum()
-    if 'V4 Dist' in df_periodo.columns:
-        df_periodo['V4 Dist Acumulada'] = df_periodo.groupby(coluna_jogo)['V4 Dist'].cumsum()
-    if 'V5 Dist' in df_periodo.columns:
-        df_periodo['V5 Dist Acumulada'] = df_periodo.groupby(coluna_jogo)['V5 Dist'].cumsum()
-    if 'V4 To8 Eff' in df_periodo.columns:
-        df_periodo['V4 Eff Acumulada'] = df_periodo.groupby(coluna_jogo)['V4 To8 Eff'].cumsum()
-    if 'V5 To8 Eff' in df_periodo.columns:
-        df_periodo['V5 Eff Acumulada'] = df_periodo.groupby(coluna_jogo)['V5 To8 Eff'].cumsum()
-    if 'HIA' in df_periodo.columns:
-        df_periodo['HIA Acumulada'] = df_periodo.groupby(coluna_jogo)['HIA'].cumsum()
-    if 'Player Load' in df_periodo.columns:
-        df_periodo['Player Load Acumulada'] = df_periodo.groupby(coluna_jogo)['Player Load'].cumsum()
+    # 4. A MÁGICA: O comando "with" diz ao Streamlit para desenhar tudo dentro desta aba específica!
+    with mapa_abas[periodo]:
+        
+        st.markdown(f"### Análise Fisiológica - {periodo}º Tempo")
+
+        df_periodo = df_atleta[df_atleta['Período'] == periodo].copy()
+        df_periodo = df_periodo.sort_values(by=[coluna_jogo, coluna_minuto])
+        
+        # Calcular o Acumulado (Garante que cada tempo comece do zero)
+        if 'Total Distance' in df_periodo.columns:
+            df_periodo['Dist Acumulada'] = df_periodo.groupby(coluna_jogo)['Total Distance'].cumsum()
+        if 'V4 Dist' in df_periodo.columns:
+            df_periodo['V4 Dist Acumulada'] = df_periodo.groupby(coluna_jogo)['V4 Dist'].cumsum()
+        if 'V5 Dist' in df_periodo.columns:
+            df_periodo['V5 Dist Acumulada'] = df_periodo.groupby(coluna_jogo)['V5 Dist'].cumsum()
+        if 'V4 To8 Eff' in df_periodo.columns:
+            df_periodo['V4 Eff Acumulada'] = df_periodo.groupby(coluna_jogo)['V4 To8 Eff'].cumsum()
+        if 'V5 To8 Eff' in df_periodo.columns:
+            df_periodo['V5 Eff Acumulada'] = df_periodo.groupby(coluna_jogo)['V5 To8 Eff'].cumsum()
+        if 'HIA' in df_periodo.columns:
+            df_periodo['HIA Acumulada'] = df_periodo.groupby(coluna_jogo)['HIA'].cumsum()
+        if 'Player Load' in df_periodo.columns:
+            df_periodo['Player Load Acumulada'] = df_periodo.groupby(coluna_jogo)['Player Load'].cumsum()
 
     df = df_periodo.dropna(subset=[coluna_minuto, coluna_acumulada]).copy()
 

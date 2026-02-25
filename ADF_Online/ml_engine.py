@@ -167,10 +167,16 @@ def executar_ml_ao_vivo(
     # KPIs e Limites
     pred_superior = []
     pred_inferior = []
+    
+    # Onde hoje está a calcular pred_superior e pred_inferior:
+    erro_maximo = modelo_dict['mae'] if modelo_dict and 'mae' in modelo_dict else 0
     for i, val in enumerate(acumulado_pred):
-        margem = 0.04 + (i / max(len(acumulado_pred), 1)) * 0.08 
-        pred_superior.append(val * (1 + margem))
-        pred_inferior.append(val * (1 - margem))
+        # O erro cresce à medida que tentamos prever mais longe no futuro
+        progresso = (i + 1) / max(len(acumulado_pred), 1)
+        erro_neste_ponto = erro_maximo * progresso 
+        
+        pred_superior.append(val + erro_neste_ponto)
+        pred_inferior.append(val - erro_neste_ponto)
 
     carga_projetada = acumulado_pred[-1] if acumulado_pred else carga_atual
     minuto_final_proj = minutos_futuros[-1] if minutos_futuros else minuto_atual
