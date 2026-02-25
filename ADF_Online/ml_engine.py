@@ -1,6 +1,6 @@
 """
 =====================================================================
-MOTOR ML - VERSÃO FINAL (ESCALA CORRIGIDA + CURVA DE FADIGA)
+MOTOR ML - VERSÃO PURA (SEM TRAVAS, SEM GATILHOS)
 =====================================================================
 """
 
@@ -27,13 +27,17 @@ def calcular_dias_descanso(df_atleta, jogo_atual):
     return min((jogo_atual - ultimo_jogo).days, 30)
 
 def fator_fadiga_por_minuto(minuto, minuto_max_periodo=45):
-    # Cria a curvatura natural da fadiga no gráfico (evita a linha reta)
+    # Apenas uma leve curva geométrica para o gráfico não parecer um robô (linha reta)
     progresso = minuto / max(minuto_max_periodo, 1)
     decaimento = 1.0 - (0.25 * (progresso ** 2))
     return max(0.50, decaimento)
 
 def projetar_com_modelo_treinado(modelo_dict, row_atleta, minutos_futuros,
                                  dist_acumulada_atual, minuto_atual, periodo):
+    """
+    PURA PREVISÃO DO ML: Sem travas, sem multiplicadores artificiais.
+    O modelo dita o fim, a curva de fadiga desenha o caminho.
+    """
     features = modelo_dict['features']
     modelo = modelo_dict['modelo']
     sample = {f: row_atleta.get(f, 0) for f in features}
@@ -42,21 +46,16 @@ def projetar_com_modelo_treinado(modelo_dict, row_atleta, minutos_futuros,
     sample['Minutos'] = minuto_final_periodo
     sample_df = pd.DataFrame([sample])[features]
 
-    # Agora a IA recebe os dados na escala certa e prevê um valor alto e coerente!
+    # 1. PREVISÃO EXATA DO MODELO (Sem nenhuma alteração)
     dist_final_prevista = float(modelo.predict(sample_df)[0])
 
-    dist_restante = dist_final_prevista - dist_acumulada_atual
-    
-    # Trava de segurança: se ele estiver batendo recordes, projeta para cima
-    if dist_restante <= 0:
-        ritmo = dist_acumulada_atual / max(minuto_atual, 1)
-        dist_restante = ritmo * len(minutos_futuros) * 0.8
-        dist_final_prevista = dist_acumulada_atual + dist_restante
+    # 2. O que falta correr (A única trava é a da física: a distância não pode ser negativa)
+    dist_restante = max(0.0, dist_final_prevista - dist_acumulada_atual)
 
+    # 3. Distribuição curva simples
     acumulado_pred = []
     acum = dist_acumulada_atual
     
-    # Distribui os metros que faltam copiando o formato da fadiga natural (curva)
     fatores = [fator_fadiga_por_minuto(m, minuto_final_periodo) for m in minutos_futuros]
     soma_fatores = sum(fatores) if sum(fatores) > 0 else 1
 
@@ -67,25 +66,21 @@ def projetar_com_modelo_treinado(modelo_dict, row_atleta, minutos_futuros,
 
     return acumulado_pred, dist_final_prevista
 
+
 def projetar_fallback_shap(df_historico, coluna_distancia, coluna_acumulada,
                             coluna_minuto, minutos_futuros, carga_atual,
                             minuto_atual, fator_hoje, placar_atual,
                             media_min_geral, media_min_cenario, peso_placar):
     acumulado_pred = []
     valor_acum = carga_atual
-
     for m in minutos_futuros:
         dist_g = media_min_geral.loc[m]   if m in media_min_geral.index   else 0
         dist_c = media_min_cenario.loc[m] if m in media_min_cenario.index else dist_g
-
         dist_mesclada = (dist_c * peso_placar) + (dist_g * (1 - peso_placar))
-        dist_mesclada = max(0, dist_mesclada)
-
-        dist_projetada = dist_mesclada * fator_hoje
-        valor_acum += dist_projetada
+        valor_acum += max(0, dist_mesclada * fator_hoje)
         acumulado_pred.append(valor_acum)
-
     return acumulado_pred
+
 
 def executar_ml_ao_vivo(
     df_historico, df_atual, df_base,
@@ -132,27 +127,14 @@ def executar_ml_ao_vivo(
 
     dias_desc = calcular_dias_descanso(df_historico, pd.to_datetime(jogo_atual_nome)) if hasattr(jogo_atual_nome, 'year') or isinstance(jogo_atual_nome, str) else 7
 
-    # =========================================================================
-    # CORREÇÃO CRÍTICA: RECONSTRUINDO AS FEATURES NA ESCALA CORRETA (POR JOGO)
-    # =========================================================================
-    hia_cols = ['V4 To8 Eff', 'V5 To8 Eff', 'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff']
-    df_historico['HIA'] = df_historico[[c for c in hia_cols if c in df_historico.columns]].sum(axis=1) if any(c in df_historico.columns for c in hia_cols) else 0
-    
-    hs_cols = ['V4 Dist', 'V5 Dist', 'V6 Dist']
-    df_historico['HS_Dist'] = df_historico[[c for c in hs_cols if c in df_historico.columns]].sum(axis=1) if any(c in df_historico.columns for c in hs_cols) else 0
-    
-    sprint_cols = ['V6 Dist', 'V7 Dist', 'V8 Dist']
-    df_historico['Sprint_Dist'] = df_historico[[c for c in sprint_cols if c in df_historico.columns]].sum(axis=1) if any(c in df_historico.columns for c in sprint_cols) else 0
-
+    # Constrói as features exatamente como o predictive.py treinou
     def soma_jogo(col):
-        if col not in df_historico.columns: return 0
-        return df_historico.groupby(coluna_jogo)[col].sum().mean()
+        return df_historico.groupby(coluna_jogo)[col].sum().mean() if col in df_historico.columns else 0
 
     def soma_jogo_ctx(col, ctx):
         if col not in df_historico.columns or 'Resultado' not in df_historico.columns: return 0
         df_c = df_historico[df_historico['Resultado'] == ctx]
-        if df_c.empty: return soma_jogo(col)
-        return df_c.groupby(coluna_jogo)[col].sum().mean()
+        return df_c.groupby(coluna_jogo)[col].sum().mean() if not df_c.empty else soma_jogo(col)
 
     media_geral = soma_jogo(coluna_distancia)
     media_3j = df_historico.groupby(coluna_jogo)[coluna_distancia].sum().tail(3).mean()
@@ -199,7 +181,7 @@ def executar_ml_ao_vivo(
             df_historico, coluna_distancia, coluna_acumulada, coluna_minuto, minutos_futuros, carga_atual,
             minuto_atual, fator_hoje, placar_atual, media_min_geral, media_min_cenario, peso_placar
         )
-        resultado['modelo_usado'] = "Fallback SHAP (Pesos Históricos Ajustados)"
+        resultado['modelo_usado'] = "Fallback SHAP"
 
     pred_superior = []
     pred_inferior = []
