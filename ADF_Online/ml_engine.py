@@ -77,48 +77,47 @@ def fator_fadiga_por_minuto(minuto, minuto_max_periodo=45):
     decaimento = 1.0 - (0.15 * (progresso ** 2))
     return max(0.75, decaimento)
 
-
 def projetar_com_modelo_treinado(modelo_dict, row_atleta, minutos_futuros,
-                                 dist_acumulada_atual, minuto_atual, minuto_final_alvo):
+                                 dist_acumulada_atual, minuto_atual):
     """
-    Usa o XGBoost treinado para projetar a distância final.
-    Distribui o restante proporcionalmente para criar uma curva realista sem perder volume.
+    Usa o XGBoost treinado (que prevê o jogo todo) e escala a velocidade
+    exatamente para o tempo restante configurado nos filtros do Live Tracker.
     """
     features  = modelo_dict['features']
     modelo    = modelo_dict['modelo']
 
     sample = {f: row_atleta.get(f, 0) for f in features}
     
-    # A IA precisa saber o MINUTO EXATO onde o corte foi feito para saber o quanto falta jogar!
-    sample['Minutos'] = minuto_atual
+    # 1. Mantemos 90 para a IA prever o total do jogo corretamente sem bugar
+    sample['Minutos'] = 90
     sample_df = pd.DataFrame([sample])[features]
 
-    dist_final_prevista = float(modelo.predict(sample_df)[0])
+    # Previsão total de 90 minutos (ex: 10.000m)
+    dist_final_prevista_90m = float(modelo.predict(sample_df)[0])
 
-    # CORREÇÃO 2: Se o atleta estiver "voando" e já correu mais do que a IA previa, 
-    # não podemos travar o gráfico. Ajustamos a projeção para cima!
-    if dist_final_prevista <= dist_acumulada_atual:
-        fator_trend = row_atleta.get('Trend_Dist', 1.0)
-        dist_extra = (dist_acumulada_atual / max(minuto_atual, 1)) * len(minutos_futuros) * fator_trend
-        dist_final_prevista = dist_acumulada_atual + dist_extra
+    # 2. Descobrimos a "velocidade média" projetada pela IA (ex: 111 metros por minuto)
+    taxa_por_minuto = dist_final_prevista_90m / 90.0
 
-    dist_restante = max(0, dist_final_prevista - dist_acumulada_atual)
+    # 3. Calculamos o volume exato que o atleta fará APENAS nos minutos futuros do filtro
+    dist_restante_no_filtro = taxa_por_minuto * len(minutos_futuros)
+    dist_restante_no_filtro = max(0, dist_restante_no_filtro)
 
+    # 4. Distribuímos esse volume de forma realista usando a curva de fadiga
     acumulado_pred = []
     acum = dist_acumulada_atual
-
-    # CORREÇÃO 3: Curva de fadiga suave que NÃO encolhe o volume total prometido
+    
     fatores = [fator_fadiga_por_minuto(m) for m in minutos_futuros]
     soma_fatores = sum(fatores) if sum(fatores) > 0 else 1
 
     for m, fator in zip(minutos_futuros, fatores):
-        # A divisão matemática garante que 100% da dist_restante será distribuída
-        dist_este_minuto = dist_restante * (fator / soma_fatores)
+        dist_este_minuto = dist_restante_no_filtro * (fator / soma_fatores)
         acum += dist_este_minuto
         acumulado_pred.append(acum)
 
-    return acumulado_pred, dist_final_prevista
+    # O valor final é a soma do que ele já tinha feito + o que ele correu no espaço do filtro
+    dist_final_prevista_filtro = acumulado_pred[-1] if acumulado_pred else dist_acumulada_atual
 
+    return acumulado_pred, dist_final_prevista_filtro
 
 def projetar_fallback_shap(df_historico, coluna_distancia, coluna_acumulada,
                             coluna_minuto, minutos_futuros, carga_atual,
