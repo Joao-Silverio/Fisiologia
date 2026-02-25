@@ -10,6 +10,9 @@ ARQUIVO_TEMP = 'ADF_TEMP_HOME.xlsb'
 # Adicionando o caminho oficial da pasta de modelos
 DIRETORIO_MODELOS = os.path.join(BASE_DIR, 'models')
 
+# Adiciona Logo:
+CAMINHO_LOGO = os.path.join(BASE_DIR, 'BarraFC.png')
+
 # ==========================================
 # 2. COLUNAS DA BASE DE DADOS
 # ==========================================

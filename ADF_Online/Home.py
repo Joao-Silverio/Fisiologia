@@ -3,22 +3,24 @@ import pandas as pd
 import os
 import shutil
 import warnings
-import config # <-- Importamos as configurações
+import config # <-- Garantindo o import do config
+from PIL import Image # <-- IMPORTANTE: Adicione esta linha para abrir a imagem com segurança
 
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
-# Trocando o 'page_icon' para a sua imagem (muda o ícone da aba do navegador)
-st.set_page_config(page_title="Sports Performance Hub", layout="wide", page_icon="BarraFC.png")
+# 1. Carrega a imagem de forma segura usando o caminho absoluto
+logo = Image.open(config.CAMINHO_LOGO)
 
-# Criando duas colunas: uma bem fininha para a logo e uma larga para o título
+# 2. Passa a variável 'logo' para o page_icon
+st.set_page_config(page_title="Sports Performance Hub", layout="wide", page_icon=logo)
+
 col_logo, col_titulo = st.columns([1, 15]) 
 
 with col_logo:
-    # O width=60 controla o tamanho da imagem. Você pode aumentar ou diminuir!
-    st.image("BarraFC.png", width=100) 
+    # 3. Passa a variável 'logo' para o st.image
+    st.image(logo, width=100) 
 
 with col_titulo:
-    # O título agora fica sem o emoji, limpo e ao lado da imagem
     st.title("Sports Performance Hub")
 
 st.markdown("Bem-vindo ao painel central de análise fisiológica e tática.")

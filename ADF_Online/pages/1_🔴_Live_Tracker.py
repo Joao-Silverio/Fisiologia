@@ -7,20 +7,27 @@ import os
 import warnings
 from streamlit_autorefresh import st_autorefresh
 from ml_engine import executar_ml_ao_vivo
-import config  # <--- Importando as configurações
+import config  
+from PIL import Image # <-- Adicione o PIL aqui também
 
-# 1. Adicionando o escudo na aba do navegador (page_icon)
-st.set_page_config(page_title="Live Tracker Físico", layout="wide", page_icon="BarraFC.png")
+# 1. Carrega a imagem com segurança
+logo = Image.open(config.CAMINHO_LOGO)
 
-st.markdown("""<style>.block-container { padding-top: 1rem; padding-bottom: 1rem; }</style>""", unsafe_allow_html=True)
+# 2. Usa a variável 'logo'
+st.set_page_config(page_title="Live Tracker Físico", layout="wide", page_icon=logo)
+
+st.markdown("""
+    <style>
+        .block-container { padding-top: 1rem; padding-bottom: 1rem; }
+    </style>
+    """, unsafe_allow_html=True)
 
 contador = st_autorefresh(interval=60000, limit=1000, key="live_tracker_refresh")
 
-# 2. Criando as colunas para a logo e o título
 col_logo, col_titulo = st.columns([1, 15])
 
 with col_logo:
-    st.image("BarraFC.png", width=100)
+    st.image(logo, width=100) # <-- Usa a variável 'logo'
 
 with col_titulo:
     st.title('Live Tracker: Projeção de Carga Física')
