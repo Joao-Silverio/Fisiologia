@@ -82,44 +82,41 @@ def fator_fadiga_por_minuto(minuto, minuto_max_periodo=45):
 def projetar_com_modelo_treinado(modelo_dict, row_atleta, minutos_futuros,
                                  dist_acumulada_atual, minuto_atual, periodo):
     """
-    Usa o XGBoost treinado por tempo e escala a velocidade
-    exatamente para o tempo restante configurado nos filtros do Live Tracker.
+    Usa o XGBoost (T1/T2) para prever o volume e distribui de forma curva.
+    Garante que a projeção não seja uma linha reta e reflita a fadiga.
     """
-    features  = modelo_dict['features']
-    modelo    = modelo_dict['modelo']
-
+    features = modelo_dict['features']
+    modelo = modelo_dict['modelo']
     sample = {f: row_atleta.get(f, 0) for f in features}
     
-    # 1. Como dividimos por tempo, o alvo não é 90, mas sim o fim do período!
-    minutos_totais_periodo = 48 if periodo == 1 else 50
-    sample['Minutos'] = minutos_totais_periodo
+    # 1. Alvo é o final do tempo (45 ou 50 min)
+    minuto_final_periodo = 48 if periodo == 1 else 50
+    sample['Minutos'] = minuto_final_periodo
     sample_df = pd.DataFrame([sample])[features]
 
-    # Previsão total do período (ex: 5.000m no 1º tempo)
-    dist_final_prevista_periodo = float(modelo.predict(sample_df)[0])
+    # Previsão bruta da IA para o final deste tempo
+    dist_final_prevista = float(modelo.predict(sample_df)[0])
 
-    # 2. Descobrimos a "velocidade média" projetada
-    taxa_por_minuto = dist_final_prevista_periodo / float(minutos_totais_periodo)
+    # 2. Cálculo do volume que falta percorrer
+    # Se a IA prever menos que o atual, mantemos um volume mínimo para evitar linha reta negativa
+    dist_restante = max(10, dist_final_prevista - dist_acumulada_atual)
 
-    # 3. Calculamos o volume exato que o atleta fará APENAS nos minutos futuros
-    dist_restante_no_filtro = taxa_por_minuto * len(minutos_futuros)
-    dist_restante_no_filtro = max(0, dist_restante_no_filtro)
-
-    # 4. Distribuímos o volume usando a curva de fadiga
+    # 3. Distribuição Dinâmica (Aqui evitamos a linha reta)
     acumulado_pred = []
     acum = dist_acumulada_atual
     
-    fatores = [fator_fadiga_por_minuto(m, minutos_totais_periodo) for m in minutos_futuros]
+    # Geramos os pesos de fadiga para cada minuto
+    fatores = [fator_fadiga_por_minuto(m, minuto_final_periodo) for m in minutos_futuros]
     soma_fatores = sum(fatores) if sum(fatores) > 0 else 1
 
     for m, fator in zip(minutos_futuros, fatores):
-        dist_este_minuto = dist_restante_no_filtro * (fator / soma_fatores)
-        acum += dist_este_minuto
+        # Em vez de dividir o volume por igual (reta), aplicamos o peso da fadiga
+        # Isso faz com que a linha comece mais inclinada e vá suavizando (curva)
+        dist_minuto = dist_restante * (fator / soma_fatores)
+        acum += dist_minuto
         acumulado_pred.append(acum)
 
-    dist_final_prevista_filtro = acumulado_pred[-1] if acumulado_pred else dist_acumulada_atual
-
-    return acumulado_pred, dist_final_prevista_filtro
+    return acumulado_pred, dist_final_prevista
 
 def projetar_fallback_shap(df_historico, coluna_distancia, coluna_acumulada,
                             coluna_minuto, minutos_futuros, carga_atual,
