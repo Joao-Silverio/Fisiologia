@@ -175,53 +175,24 @@ for periodo in periodos_para_analise:
         minuto_final_partida = int(max_minutos_por_jogo.max())
         
         # --- A NOVA LÓGICA DE SIMULAÇÃO DO "AGORA" (MINUTO DE CORTE) ---
-        key_slider = f"slider_corte_{periodo}"
-        key_num = f"num_corte_{periodo}"
-
-        if key_slider not in st.session_state:
-            st.session_state[key_slider] = minuto_atual_max
-        if key_num not in st.session_state:
-            st.session_state[key_num] = minuto_atual_max
-
-        def atualizar_caixinha():
-            st.session_state[key_num] = st.session_state[key_slider]
-            
-        def atualizar_barra():
-            st.session_state[key_slider] = st.session_state[key_num]
-
-        col_barra, col_caixa = st.columns([4, 1])
+        minuto_corte = st.slider(
+            f"⏱️ Simular o 'Agora' (Minuto de Corte):",
+            min_value=1,
+            max_value=minuto_atual_max,
+            value=minuto_atual_max, 
+            step=1,
+            help="💡 DICA: Clique diretamente no número acima da barra para digitar o minuto exato no teclado!",
+            key=f"slider_corte_{periodo}"
+        )
         
-        with col_barra:
-            st.slider(
-                f"⏱️ Simular o 'Agora' (Minuto de Corte):",
-                min_value=1,
-                max_value=minuto_atual_max,
-                step=1,
-                help="Volte no tempo para auditar o ritmo do atleta.",
-                key=key_slider,
-                on_change=atualizar_caixinha
-            )
-            
-        with col_caixa:
-            st.number_input(
-                "Minuto Exato:",
-                min_value=1,
-                max_value=minuto_atual_max,
-                step=1,
-                key=key_num,
-                on_change=atualizar_barra
-            )
-            
-        # Esta é a variável que estava faltando!
-        minuto_corte = st.session_state[key_slider]
-        
+        # Define automaticamente o final da projeção nos bastidores
         minuto_projecao_ate = max(minuto_final_partida, 45 if periodo == 1 else 50)
         
         df_historico = df[df[coluna_jogo] != jogo_atual_nome].copy()
         df_atual = df[df[coluna_jogo] == jogo_atual_nome].sort_values(coluna_minuto)
         
         # Cria um DataFrame simulado ("congelado" no tempo até o minuto de corte)
-        df_atual_corte = df_atual[df_atual[coluna_minuto] <= minuto_corte].copy()
+        df_atual_corte = df_atual[df_atual[coluna_minuto] <= minuto_corte].copy()       
 
         minutos_futuros = []
         pred_superior = []
