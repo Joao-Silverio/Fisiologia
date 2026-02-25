@@ -22,14 +22,16 @@ import numpy as np
 import pandas as pd
 import config # <-- Importamos as configurações
 
-def carregar_modelo_treinado(diretorio, metrica_selecionada):
-    """Carrega o modelo específico baseado no config.py, buscando na pasta models."""
+def carregar_modelo_treinado(diretorio, metrica_selecionada, periodo):
+    """Carrega o modelo específico baseado na métrica e no PERÍODO (1 ou 2)."""
     if metrica_selecionada not in config.METRICAS_CONFIG:
         return None
         
-    nome_arquivo = config.METRICAS_CONFIG[metrica_selecionada]["arquivo_modelo"]
+    nome_base = config.METRICAS_CONFIG[metrica_selecionada]["arquivo_modelo"]
     
-    # Agora ele usa o caminho DIRETORIO_MODELOS configurado no config.py
+    # Transforma "modelo_V4_Dist.pkl" em "modelo_V4_Dist_T1.pkl" ou "_T2.pkl"
+    nome_arquivo = nome_base.replace('.pkl', f'_T{periodo}.pkl')
+    
     caminho = os.path.join(config.DIRETORIO_MODELOS, nome_arquivo)
     
     try:
@@ -246,7 +248,9 @@ def executar_ml_ao_vivo(
     ) if hasattr(jogo_atual_nome, 'year') or isinstance(jogo_atual_nome, str) else 7
 
     # ── Tentar modelo treinado primeiro ──────────────────────────────────────
-    modelo_dict = carregar_modelo_treinado(DIRETORIO_ATUAL, metrica_selecionada)
+    # Agora envia o 'periodo' (1 ou 2) para garantir que carrega a versão certa da IA
+    modelo_dict = carregar_modelo_treinado(DIRETORIO_ATUAL, metrica_selecionada, periodo)
+    
     acumulado_pred = []
 
     if modelo_dict is not None:
