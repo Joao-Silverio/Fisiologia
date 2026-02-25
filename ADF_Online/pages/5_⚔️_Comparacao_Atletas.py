@@ -23,8 +23,15 @@ if 'df_global' not in st.session_state:
     st.stop()
     
 df_base = st.session_state['df_global'].copy()
-df_base['Data_Display'] = pd.to_datetime(df_base['Data']).dt.strftime('%d/%m/%Y') + ' ' + df_base['Adversário'].astype(str)
 
+# 1. Converte a coluna para o formato de data (caso ainda não esteja)
+df_base['Data'] = pd.to_datetime(df_base['Data'], errors='coerce')
+
+# 2. Ordena os dados do MAIS NOVO para o MAIS ANTIGO (ascending=False)
+df_base = df_base.sort_values(by='Data', ascending=False)
+
+# 3. Cria o nome de exibição do jogo já com os dados ordenados
+df_base['Data_Display'] = df_base['Data'].dt.strftime('%d/%m/%Y') + ' ' + df_base['Adversário'].astype(str)
 # ==========================================
 # 2. FILTROS DE COMPARAÇÃO (TUDO EM UMA LINHA)
 # ==========================================
