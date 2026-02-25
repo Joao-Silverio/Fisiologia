@@ -175,18 +175,17 @@ for periodo in periodos_para_analise:
         minuto_final_partida = int(max_minutos_por_jogo.max())
         
         # --- A NOVA LÓGICA DE SIMULAÇÃO DO "AGORA" (MINUTO DE CORTE) ---
-        col_s1 = st.columns(1)
-        
-        with col_s1:
-            minuto_corte = st.slider(
-                f"⏱️ Simular Minuto de Corte:",
-                min_value=1,
-                max_value=minuto_atual_max,
-                value=minuto_atual_max, # Por padrão fica no fim (tempo real)
-                step=1,
-                help="Volte no tempo para ver qual era a projeção da IA naquele minuto. Útil para ver se o atleta caiu de rendimento em relação ao que se esperava.",
-                key=f"slider_corte_{periodo}"
-            )
+        minuto_corte = st.slider(
+            f"⏱️ Simular o 'Agora' (Minuto de Corte):",
+            min_value=1,
+            max_value=minuto_atual_max,
+            value=minuto_atual_max, 
+            step=1,
+            help="Volte no tempo para ver qual era a projeção da IA naquele minuto. Útil para auditar o ritmo do atleta.",
+            key=f"slider_corte_{periodo}"
+        )        
+        # Define automaticamente o final da projeção nos bastidores (45 min ou 50 min)
+        minuto_projecao_ate = max(minuto_final_partida, 45 if periodo == 1 else 50)
 
         df_historico = df[df[coluna_jogo] != jogo_atual_nome].copy()
         df_atual = df[df[coluna_jogo] == jogo_atual_nome].sort_values(coluna_minuto)
