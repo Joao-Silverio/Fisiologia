@@ -43,9 +43,10 @@ def _load_data_logic(hora_mod):
         
         # 3. Limpar nomes de colunas (Remove espaços extras)
         df.columns = df.columns.str.strip()
-        for col in ['Latitude', 'Longitude']
-            if col in df.cloumns:
-                df[col] = pd.to_numeric(df[col].astype(str).str.replace(',','.'), errors = 'coerce') #Blindagem para Latitude Longitude
+        
+        for col in ['Latitude', 'Longitude']: 
+            if col in df.columns: 
+                df[col] = pd.to_numeric(df[col].astype(str).str.replace(',','.'), errors='coerce') #Blindagem para Latitude Longitude
 
         # 4. Cálculo do Fator Casa (Arena Barra)        
         if 'Latitude' in df.columns and 'Longitude' in df.columns:
