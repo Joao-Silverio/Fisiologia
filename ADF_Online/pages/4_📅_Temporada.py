@@ -175,7 +175,7 @@ with tab1:
         title=f"Tendência de {nome_metrica_legivel} ({titulo_contexto})",
     )
     fig_line.update_layout(xaxis_title="Data / Adversário", yaxis_title=nome_metrica_legivel)
-    st.plotly_chart(fig_line, width="content")
+    st.plotly_chart(fig_line, width="stretch")
 
     st.divider()
 
@@ -192,7 +192,7 @@ with tab1:
         labels={'HIA': 'Média de Ações Intensas (HIA)'},
         color_discrete_map=config.MAPA_CORES_PLACAR, 
     )
-    st.plotly_chart(fig_placar, width="content")
+    st.plotly_chart(fig_placar, width="stretch")
     st.info("💡 Este gráfico revela se a equipe mantém a intensidade alta mesmo quando está em vantagem ou se há um relaxamento físico.")
 
 # --- ABA 2: COMPARAÇÃO DE COMPETIÇÕES ---
@@ -211,7 +211,7 @@ with tab2:
             title=f"Comparativo: {nome_metrica_legivel}",
         )
         fig_comp.update_layout(showlegend=False)
-        st.plotly_chart(fig_comp, width="content")
+        st.plotly_chart(fig_comp, width="stretch")
     else:
         st.warning("Não há dados de Competição suficientes para gerar este gráfico.")
 
@@ -232,7 +232,7 @@ with tab3:
             title=f"Jogos Mais Intensos ({titulo_contexto})",
         )
         fig_top.update_layout(xaxis_title="Data / Adversário", yaxis_title=nome_metrica_legivel)
-        st.plotly_chart(fig_top, width="content")
+        st.plotly_chart(fig_top, width="stretch")
     else:
         st.warning("Não há dados suficientes para gerar os Top Jogos.")
 
@@ -260,7 +260,7 @@ with tab4:
         )
         
         fig_comp_local.update_layout(showlegend=False, height=450)
-        st.plotly_chart(fig_comp_local, width="content")
+        st.plotly_chart(fig_comp_local, width="stretch")
         
         st.info("""
         **Análise de Performance:** Diferenças significativas entre Casa e Fora podem indicar impacto da fadiga de viagem, 
@@ -268,5 +268,5 @@ with tab4:
         """)
     else:
         st.warning("Não há dados suficientes sobre o Local do Jogo.")
-    st.plotly_chart(fig_placar, width="content")
+    st.plotly_chart(fig_placar, width="stretch")
     st.info("💡 Este gráfico revela se a equipe mantém a intensidade alta mesmo quando está em vantagem ou se há um relaxamento físico.")
