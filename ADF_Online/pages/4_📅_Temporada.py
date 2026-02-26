@@ -173,10 +173,9 @@ with tab1:
         y=metrica_visao, 
         markers=True,
         title=f"Tendência de {nome_metrica_legivel} ({titulo_contexto})",
-        template='plotly_white'
     )
     fig_line.update_layout(xaxis_title="Data / Adversário", yaxis_title=nome_metrica_legivel)
-    st.plotly_chart(fig_line, use_container_width=True)
+    st.plotly_chart(fig_line, width="content")
 
     st.divider()
 
@@ -192,9 +191,8 @@ with tab1:
         title="Intensidade Média da Equipe por Condição do Jogo",
         labels={'HIA': 'Média de Ações Intensas (HIA)'},
         color_discrete_map=config.MAPA_CORES_PLACAR, 
-        template='plotly_white'
     )
-    st.plotly_chart(fig_placar, use_container_width=True)
+    st.plotly_chart(fig_placar, width="content")
     st.info("💡 Este gráfico revela se a equipe mantém a intensidade alta mesmo quando está em vantagem ou se há um relaxamento físico.")
 
 # --- ABA 2: COMPARAÇÃO DE COMPETIÇÕES ---
@@ -211,10 +209,9 @@ with tab2:
             color='Competição',
             text_auto='.0f',
             title=f"Comparativo: {nome_metrica_legivel}",
-            template='plotly_white'
         )
         fig_comp.update_layout(showlegend=False)
-        st.plotly_chart(fig_comp, use_container_width=True)
+        st.plotly_chart(fig_comp, width="content")
     else:
         st.warning("Não há dados de Competição suficientes para gerar este gráfico.")
 
@@ -233,10 +230,9 @@ with tab3:
             color=metrica_visao,
             color_continuous_scale='Reds',
             title=f"Jogos Mais Intensos ({titulo_contexto})",
-            template='plotly_white'
         )
         fig_top.update_layout(xaxis_title="Data / Adversário", yaxis_title=nome_metrica_legivel)
-        st.plotly_chart(fig_top, use_container_width=True)
+        st.plotly_chart(fig_top, width="content")
     else:
         st.warning("Não há dados suficientes para gerar os Top Jogos.")
 
@@ -261,11 +257,10 @@ with tab4:
             text_auto='.0f',
             title=f"Média de {nome_metrica_legivel} por Localização",
             color_discrete_map={'🏟️ Casa (Arena Barra)': '#2E7D32', '🚌 Fora': '#546E7A'},
-            template='plotly_white'
         )
         
         fig_comp_local.update_layout(showlegend=False, height=450)
-        st.plotly_chart(fig_comp_local, use_container_width=True)
+        st.plotly_chart(fig_comp_local, width="content")
         
         st.info("""
         **Análise de Performance:** Diferenças significativas entre Casa e Fora podem indicar impacto da fadiga de viagem, 
@@ -273,5 +268,5 @@ with tab4:
         """)
     else:
         st.warning("Não há dados suficientes sobre o Local do Jogo.")
-    st.plotly_chart(fig_placar, use_container_width=True)
+    st.plotly_chart(fig_placar, width="content")
     st.info("💡 Este gráfico revela se a equipe mantém a intensidade alta mesmo quando está em vantagem ou se há um relaxamento físico.")
