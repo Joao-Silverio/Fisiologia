@@ -30,7 +30,7 @@ COLUNAS_NECESSARIAS = [
     'Name', 'Data', 'Interval', 'Name', 'Período', 'Placar', 'Resultado', 'Adversário',
     'Total Distance', 'V4 Dist', 'V5 Dist', 'V4 To8 Eff', 'V5 To8 Eff', 
     'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Player Load',
-    'Parte (15 min)', 'Parte (5 min)', 'Parte (3 min)', 'Competição', 'Metabolic Power'
+    'Parte (15 min)', 'Parte (5 min)', 'Parte (3 min)', 'Competição', 'Metabolic Power', 'Latitude', 'Longitude'
 ]
 
 COLS_NAO_METRICAS = ['Data', 'Name', 'Adversário', 'Competição', 'Placar', 'Resultado', 'Parte (15 min)', 'Parte (5 min)', 'Parte (3 min)']
