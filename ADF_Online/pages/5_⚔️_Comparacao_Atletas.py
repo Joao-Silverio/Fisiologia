@@ -121,7 +121,7 @@ st.subheader("📊 Resumo do Confronto (Jogo Completo)")
 
 c1, c2, c3 = st.columns([1, 0.2, 1])
 c1.markdown(f"<h4 style='text-align: right; color: #EF5350; margin-bottom: 0;'>🔴 {atleta_1}</h4><p style='text-align: right; margin-top: 0;'>{df_a1['Minutos Jogados']:.0f} min</p>", unsafe_allow_html=True)
-c2.markdown(f"<h3 style='text-align: center; color: #bdbdbd;'>VS</h3>", unsafe_allow_html=True)
+c2.markdown(f"<h3 style='text-align: center; color: var(--text-color); opacity: 0.7;'>VS</h3>", unsafe_allow_html=True)
 c3.markdown(f"<h4 style='text-align: left; color: #42A5F5; margin-bottom: 0;'>🔵 {atleta_2}</h4><p style='text-align: left; margin-top: 0;'>{df_a2['Minutos Jogados']:.0f} min</p>", unsafe_allow_html=True)
 
 # Agora com 6 colunas para acomodar a métrica de Sprint (V5)
@@ -134,11 +134,11 @@ def kpi_card(col, label, val1, val2, unidade=""):
     with col:
         # Fonte levemente reduzida (16px e 13px) para os 6 cards caberem na mesma linha perfeitamente
         st.markdown(f"""
-        <div style='background-color: #f8f9fa; padding: 12px; border-radius: 10px; text-align: center; border: 1px solid #e0e0e0; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>
-            <p style='color: #757575; margin-bottom: 5px; font-size: 13px; font-weight: bold;'>{label}</p>
+        <div style='background-color: var(--background-color); padding: 12px; border-radius: 10px; text-align: center; border: 1px solid var(--secondary-background-color); box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>
+            <p style='color: var(--text-color); margin-bottom: 5px; font-size: 13px; font-weight: bold;'>{label}</p>
             <h4 style='margin-top: 0; font-size: 16px;'>
                 <span style='color: {cor1};'>{val1:.0f}{unidade}</span> 
-                <span style='color: #bdbdbd; font-size: 13px; margin: 0 2px;'>x</span> 
+                <span style='color: var(--text-color); opacity: 0.7; font-size: 13px; margin: 0 2px;'>x</span> 
                 <span style='color: {cor2};'>{val2:.0f}{unidade}</span>
             </h4>
         </div>
@@ -198,7 +198,7 @@ with col_radar:
 
     fig_radar.update_layout(
         polar=dict(radialaxis=dict(visible=True, range=[0, 100], ticksuffix="%")),
-        showlegend=True, template='plotly_white',
+        showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
         height=450, margin=dict(t=30, b=40, l=40, r=40)
     )
@@ -238,7 +238,7 @@ with col_timeline:
         fig.add_trace(go.Scatter(x=df1['Interval'], y=df1[coluna_y], mode='lines', name=atleta_1, line=dict(color='#EF5350', width=3)))
         fig.add_trace(go.Scatter(x=df2['Interval'], y=df2[coluna_y], mode='lines', name=atleta_2, line=dict(color='#42A5F5', width=3)))
         fig.update_layout(
-            template='plotly_white', height=380,
+            height=380,
             xaxis_title="Minuto de Jogo", yaxis_title=titulo_y,
             hovermode="x unified", margin=dict(t=10, b=10, l=10, r=10),
             legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5)
