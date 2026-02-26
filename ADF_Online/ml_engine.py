@@ -1,6 +1,6 @@
 """
 =====================================================================
-MOTOR ML - ARQUITETURA SNAPSHOT (CURVA REAL DO ATLETA)
+MOTOR ML - ARQUITETURA SNAPSHOT (CORREÇÃO DA ESCALA DO SLIDER)
 =====================================================================
 """
 import os
@@ -36,39 +36,48 @@ def calcular_dias_descanso(df_atleta, jogo_atual):
     return min((jogo_atual - ultimo_jogo).days, 30)
 
 def projetar_com_modelo_treinado(modelo_dict, row_atleta, minutos_futuros,
-                                 dist_acumulada_atual, media_min_geral):
+                                 dist_acumulada_atual, media_min_geral, periodo, minuto_atual):
     """
-    1. A IA dita o destino final.
-    2. A variável `media_min_geral` dita o caminho real com a assinatura do atleta.
+    1. Calcula a projeção TOTAL até ao fim do tempo regulamentar.
+    2. Recorta e devolve apenas os minutos que o utilizador escolheu no slider.
+    Isso impede que a linha fique espremida!
     """
     features = modelo_dict['features']
     modelo = modelo_dict['modelo']
     
-    # Prepara a amostra exatamente com as variáveis do minuto atual
     sample = {f: row_atleta.get(f, 0) for f in features}
     sample_df = pd.DataFrame([sample])[features]
 
-    # PREVISÃO DA IA (O Destino Final)
+    # PREVISÃO DA IA (Para o final do tempo regulamentar)
     dist_final_prevista = float(modelo.predict(sample_df)[0])
-
-    # O que falta correr (Trava simples da física: nunca menor que zero)
     dist_restante = max(0.0, dist_final_prevista - dist_acumulada_atual)
 
-    # DISTRIBUIÇÃO USANDO O HISTÓRICO REAL (A MÁGICA VISUAL)
+    # O SEGREDO: Calculamos a escala ATÉ AO FIM DO JOGO (45 ou 50 min)
+    minuto_final_periodo = 45 if periodo == 1 else 50
+    
+    # Se o jogo teve acréscimos e o slider for além dos 45, esticamos o cálculo
+    minuto_limite_calculo = max(minuto_final_periodo, minutos_futuros[-1] if minutos_futuros else minuto_final_periodo)
+    todos_minutos_restantes = list(range(minuto_atual + 1, minuto_limite_calculo + 1))
+    
+    pesos_totais = []
+    for m in todos_minutos_restantes:
+        peso = media_min_geral.loc[m] if m in media_min_geral.index else 1.0
+        pesos_totais.append(max(0.01, peso))
+
+    soma_pesos_totais = sum(pesos_totais) if sum(pesos_totais) > 0 else 1
+
+    # DISTRIBUI O VOLUME NO RITMO CERTO (SEM ESPREMER)
     acumulado_pred = []
     acum = dist_acumulada_atual
     
-    pesos_historicos = []
-    for m in minutos_futuros:
-        peso = media_min_geral.loc[m] if m in media_min_geral.index else 1.0
-        pesos_historicos.append(max(0.01, peso))
-
-    soma_pesos = sum(pesos_historicos) if sum(pesos_historicos) > 0 else 1
-
-    for peso in pesos_historicos:
-        dist_minuto = dist_restante * (peso / soma_pesos)
+    for m, peso in zip(todos_minutos_restantes, pesos_totais):
+        # A distância sobe aos poucos, respeitando o ritmo até aos 45 minutos
+        dist_minuto = dist_restante * (peso / soma_pesos_totais)
         acum += dist_minuto
-        acumulado_pred.append(acum)
+        
+        # Só devolvemos para o gráfico os minutos que estão dentro da seleção do Slider!
+        if m in minutos_futuros:
+            acumulado_pred.append(acum)
 
     return acumulado_pred, dist_final_prevista
 
@@ -104,14 +113,12 @@ def executar_ml_ao_vivo(
     def soma_jogo(col):
         return df_historico.groupby(coluna_jogo)[col].sum().mean() if col in df_historico.columns else 0
 
-    # Descobrir qual é a métrica alvo que a IA treinou
     metric_target = 'Dist_Total'
     for k, v in MAPA_METRICAS.items():
         if v == coluna_distancia:
             metric_target = k
             break
             
-    # Assegurar que o HIA existe no histórico para não falhar
     hia_cols = ['V4 To8 Eff', 'V5 To8 Eff', 'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff']
     if 'HIA' not in df_historico.columns:
         df_historico['HIA'] = df_historico[[c for c in hia_cols if c in df_historico.columns]].sum(axis=1) if any(c in df_historico.columns for c in hia_cols) else 0
@@ -121,14 +128,12 @@ def executar_ml_ao_vivo(
     trend_dist = media_3j / (media_geral_num + 1) if media_geral_num > 0 else 1.0
     carga_3jogos_pl = df_historico.groupby(coluna_jogo)['Player Load'].sum().tail(3).sum() if 'Player Load' in df_historico.columns else 0
 
-    # CURVA REAL MINUTO A MINUTO (O MAPA DO ATLETA)
     media_min_geral = df_historico.groupby(coluna_minuto)[coluna_distancia].mean()
 
     modelo_dict = carregar_modelo_treinado(DIRETORIO_ATUAL, metrica_selecionada, periodo)
     acumulado_pred = []
 
     if modelo_dict is not None:
-        # Passa exatamente as Features que a IA de Snapshots pede
         row_atleta = {
             'Min_Num': minuto_atual,
             'Dias_Descanso': dias_desc,
@@ -141,9 +146,9 @@ def executar_ml_ao_vivo(
         }
 
         try:
-            # Enviamos a 'media_min_geral' para o gráfico ser realista e orgânico
+            # Enviamos o período e o minuto_atual para o cálculo de proporção não espremer os dados
             acumulado_pred, dist_final_prev = projetar_com_modelo_treinado(
-                modelo_dict, row_atleta, minutos_futuros, carga_atual, media_min_geral
+                modelo_dict, row_atleta, minutos_futuros, carga_atual, media_min_geral, periodo, minuto_atual
             )
             resultado['modelo_usado'] = f"XGBoost Snapshot (MAE: {modelo_dict['mae']:.1f})"
             resultado['mae_modelo']   = modelo_dict['mae']
@@ -151,7 +156,6 @@ def executar_ml_ao_vivo(
             acumulado_pred = []
             print(f"Modelo treinado falhou: {e}")
 
-    # Fallback simples de emergência
     if not acumulado_pred:
         curva_media_acum = df_historico.groupby(coluna_minuto)[coluna_acumulada].mean()
         media_acum_agora = curva_media_acum.loc[minuto_atual] if minuto_atual in curva_media_acum.index else carga_atual
@@ -164,19 +168,22 @@ def executar_ml_ao_vivo(
             acumulado_pred.append(valor_acum)
         resultado['modelo_usado'] = "Fallback (Média Ajustada)"
 
-    # KPIs e Limites
+    # ==========================================================
+    # BUSCA MAE DE PREDICT.PY PARA CALCULAR A "SOMBRA" DE CONFIANÇA
+    # ==========================================================
     pred_superior = []
     pred_inferior = []
     
-    # Onde hoje está a calcular pred_superior e pred_inferior:
-    erro_maximo = modelo_dict['mae'] if modelo_dict and 'mae' in modelo_dict else 0
+    # Busca o erro real do modelo (ex: 137m). Se o modelo falhar (Fallback), usa 5%
+    erro_maximo = modelo_dict['mae'] if modelo_dict is not None and 'mae' in modelo_dict else (carga_atual * 0.05)
+    
     for i, val in enumerate(acumulado_pred):
-        # O erro cresce à medida que tentamos prever mais longe no futuro
+        # A sombra começa fina perto do corte e vai alargando até ao MAE máximo no final
         progresso = (i + 1) / max(len(acumulado_pred), 1)
         erro_neste_ponto = erro_maximo * progresso 
         
         pred_superior.append(val + erro_neste_ponto)
-        pred_inferior.append(val - erro_neste_ponto)
+        pred_inferior.append(max(0, val - erro_neste_ponto)) # Evita distâncias negativas
 
     carga_projetada = acumulado_pred[-1] if acumulado_pred else carga_atual
     minuto_final_proj = minutos_futuros[-1] if minutos_futuros else minuto_atual
