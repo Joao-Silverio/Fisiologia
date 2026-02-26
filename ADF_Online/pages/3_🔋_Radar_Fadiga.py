@@ -3,6 +3,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import config # <--- IMPORTANDO O CONFIG AQUI
+from streamlit_autorefresh import st_autorefresh
+from data_loader import obter_hora_modificacao, load_global_data
 
 # 1. CONFIGURAÇÃO E ESTILO
 st.set_page_config(page_title="Radar de Fadiga", layout="wide")
@@ -15,8 +17,25 @@ st.markdown("""
 
 st.title("🔋 Radar de Ausência de Estímulo (>19km/h)")
 
-if 'df_global' not in st.session_state:
-    st.warning("Carregue os dados na página principal (Home) primeiro.")
+# 1. Pede à página para "piscar os olhos" a cada 2 segundos (2000 ms)
+# Usa uma "key" diferente para cada página (ex: "refresh_comparacao", "refresh_hia")
+st_autorefresh(interval=2000, limit=None, key="refresh_desta_pagina")
+
+# 2. Verifica a "impressão digital" (hora exata) do ficheiro Excel
+hora_atual = obter_hora_modificacao(config.ARQUIVO_ORIGINAL)
+
+# 3. Pede os dados. Se a "hora_atual" não mudou, o Streamlit não faz NADA (0% de CPU).
+# Se a "hora_atual" mudou, o Streamlit carrega os dados novos!
+df_novo, df_recordes_novo = load_global_data(hora_atual)
+
+# 4. Atualiza a memória global para os gráficos desenharem com os dados frescos
+if not df_novo.empty:
+    st.session_state['df_global'] = df_novo
+    st.session_state['df_recordes'] = df_recordes_novo
+
+# E depois continuas a ler o session_state como sempre fizeste:
+if 'df_global' not in st.session_state or st.session_state['df_global'].empty:
+    st.warning("⚠️ Carregue os dados na página principal ou verifique o arquivo Excel.")
     st.stop()
     
 df_base_total = st.session_state['df_global'].copy()
