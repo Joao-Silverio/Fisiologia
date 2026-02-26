@@ -461,7 +461,6 @@ for periodo in [1, 2]:
                 title=titulo_grafico + f" - {periodo}º Tempo",
                 xaxis_title=f'Minutos de Jogo ({periodo}º Tempo)',
                 yaxis_title=metrica_selecionada,
-                template='plotly_white',
                 legend=dict(bgcolor='rgba(0,0,0,0)', orientation="h", yanchor="top", y=-0.35, xanchor="center", x=0.5),
                 height=650, hovermode='x unified', margin=dict(l=20, r=20, t=50, b=200)
             )
