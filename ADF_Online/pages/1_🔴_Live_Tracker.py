@@ -438,7 +438,7 @@ for periodo in [1, 2]:
                 height=650, hovermode='x unified', margin=dict(l=20, r=20, t=50, b=200)
             )
 
-            st.plotly_chart(fig, use_container_width=True, key=f"grafico_{periodo}")
+            st.plotly_chart(fig, width='stretch', key=f"grafico_{periodo}")
                 
         else:
             st.info(f"Nenhum dado encontrado para o {periodo}º Tempo deste atleta.")
