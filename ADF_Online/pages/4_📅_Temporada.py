@@ -247,7 +247,7 @@ with tab2:
         
         st.info("""
         💡 **Como ler esta aba:** - O **Boxplot (Caixas)** mostra a regularidade da equipa. Caixas "espremidas" indicam que a equipa joga sempre no mesmo ritmo. Os pontos soltos mostram exatamente os jogos com valores extremos.
-        - O **Gráfico de Linhas** permite comparar se uma competição específica está numa tendência de subida ou descida de exigência
+        - O **Gráfico de Linhas** permite comparar se uma competição específica está numa tendência de subida ou descida de exigênci""")
 
 # --- ABA 3: TOP JOGOS EXTREMOS ---
 with tab3:
