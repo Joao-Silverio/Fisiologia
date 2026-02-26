@@ -399,7 +399,7 @@ for periodo in [1, 2]:
             # Linhas do passado (Histórico)
             if not df_historico.empty:
                 jogos_historicos = df_historico[coluna_jogo].unique()
-                colors = px.colors.qualitative.Vivid
+                colors = px.colors.qualitative.Set1
                 for idx, jogo in enumerate(jogos_historicos):
                     df_j = df_historico[df_historico[coluna_jogo] == jogo].sort_values(coluna_minuto)
                     jogo_display = df_completo[df_completo['Data'] == jogo]['Data_Display'].iloc[0] if jogo in df_completo['Data'].values else str(jogo)
