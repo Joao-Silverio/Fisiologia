@@ -197,23 +197,57 @@ with tab1:
 
 # --- ABA 2: COMPARAÇÃO DE COMPETIÇÕES ---
 with tab2:
-    st.markdown(f"**Média de {nome_metrica_legivel} por Competição**")
+    st.markdown(f"**Análise Detalhada por Competição ({nome_metrica_legivel})**")
     
     if 'Competição' in df_plot.columns and not df_plot.empty:
-        df_comp_bar = df_plot.groupby('Competição')[metrica_visao].mean().reset_index()
         
-        fig_comp = px.bar(
-            df_comp_bar,
+        # 1. Gráfico de Distribuição (Boxplot) para ver Extremos/Erros
+        st.markdown("#### 📦 Distribuição e Jogos Extremos")
+        fig_box = px.box(
+            df_plot,
             x='Competição',
             y=metrica_visao,
             color='Competição',
-            text_auto='.0f',
-            title=f"Comparativo: {nome_metrica_legivel}",
+            points="all", # Mostra cada jogo individualmente como um pontinho
+            title=f"Variação e Extremos de {nome_metrica_legivel}",
+            template='plotly_white'
         )
-        fig_comp.update_layout(showlegend=False)
-        st.plotly_chart(fig_comp, width="stretch")
-    else:
-        st.warning("Não há dados de Competição suficientes para gerar este gráfico.")
+        fig_box.update_layout(showlegend=False)
+        st.plotly_chart(fig_box, key="box_comp_oficial")
+        
+        # 2. Gráfico de Linha Comparativo (Evolução no Tempo)
+        st.markdown("#### 📈 Evolução Jogo a Jogo por Competição")
+        df_comp_sorted = df_plot.sort_values('Data')
+        
+        fig_line_comp = px.line(
+            df_comp_sorted,
+            x='Data_Display',
+            y=metrica_visao,
+            color='Competição',
+            markers=True,
+            title=f"Tendência de {nome_metrica_legivel} nas Competições",
+            template='plotly_white'
+        )
+        fig_line_comp.update_layout(xaxis_title="Data / Adversário", yaxis_title=nome_metrica_legivel)
+        st.plotly_chart(fig_line_comp, key="line_comp_oficial")
+        
+        # 3. Tabela de Resumo Estatístico (Máximos, Mínimos e Margem de Erro)
+        st.markdown("#### 📋 Resumo Estatístico")
+        df_stats = df_plot.groupby('Competição')[metrica_visao].agg(
+            Jogos='count',
+            Média='mean',
+            Máximo='max',
+            Mínimo='min',
+            Desvio_Padrão='std' # Isso representa a "margem de erro" / oscilação
+        ).reset_index().round(1)
+        
+        # Renomear as colunas para o nome da métrica escolhida no filtro
+        df_stats.rename(columns={'Média': f'Média ({nome_metrica_legivel})'}, inplace=True)
+        st.dataframe(df_stats)
+        
+        st.info("""
+        💡 **Como ler esta aba:** - O **Boxplot (Caixas)** mostra a regularidade da equipa. Caixas "espremidas" indicam que a equipa joga sempre no mesmo ritmo. Os pontos soltos mostram exatamente os jogos com valores extremos.
+        - O **Gráfico de Linhas** permite comparar se uma competição específica está numa tendência de subida ou descida de exigência
 
 # --- ABA 3: TOP JOGOS EXTREMOS ---
 with tab3:
