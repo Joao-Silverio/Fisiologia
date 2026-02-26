@@ -128,19 +128,28 @@ c3.markdown(f"<h4 style='text-align: left; color: #42A5F5; margin-bottom: 0;'>ðŸ
 col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5, col_kpi6 = st.columns(6)
 
 def kpi_card(col, label, val1, val2, unidade=""):
-    cor1 = "#2E7D32" if val1 > val2 else "#C62828" if val1 < val2 else "gray" # Verde ganha, Vermelho perde
-    cor2 = "#2E7D32" if val2 > val1 else "#C62828" if val2 < val1 else "gray"
+    # Cores ligeiramente mais vivas para brilharem e terem contraste no Dark Mode
+    cor1 = "#4CAF50" if val1 > val2 else "#EF5350" if val1 < val2 else "gray" 
+    cor2 = "#4CAF50" if val2 > val1 else "#EF5350" if val2 < val1 else "gray"
     
     with col:
-        # Fonte levemente reduzida (16px e 13px) para os 6 cards caberem na mesma linha perfeitamente
         st.markdown(f"""
-        <div style='background-color: var(--background-color); padding: 12px; border-radius: 10px; text-align: center; border: 1px solid var(--secondary-background-color); box-shadow: 2px 2px 5px rgba(0,0,0,0.05);'>
-            <p style='color: var(--text-color); margin-bottom: 5px; font-size: 13px; font-weight: bold;'>{label}</p>
-            <h4 style='margin-top: 0; font-size: 16px;'>
-                <span style='color: {cor1};'>{val1:.0f}{unidade}</span> 
-                <span style='color: var(--text-color); opacity: 0.7; font-size: 13px; margin: 0 2px;'>x</span> 
-                <span style='color: {cor2};'>{val2:.0f}{unidade}</span>
-            </h4>
+        <div style='background-color: var(--secondary-background-color); 
+                    padding: 15px 5px; 
+                    border-radius: 10px; 
+                    border: 1px solid rgba(128, 128, 128, 0.2); 
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    display: flex; 
+                    flex-direction: column; 
+                    justify-content: center; 
+                    align-items: center; 
+                    height: 100%;'>
+            <p style='color: var(--text-color); margin: 0 0 10px 0; font-size: 13px; font-weight: bold; opacity: 0.9;'>{label}</p>
+            <div style='display: flex; justify-content: center; align-items: center; gap: 10px; width: 100%;'>
+                <span style='color: {cor1}; font-size: 18px; font-weight: 800;'>{val1:.0f}{unidade}</span> 
+                <span style='color: var(--text-color); opacity: 0.4; font-size: 14px;'>x</span> 
+                <span style='color: {cor2}; font-size: 18px; font-weight: 800;'>{val2:.0f}{unidade}</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
