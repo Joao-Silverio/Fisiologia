@@ -178,11 +178,11 @@ with col_radar:
     # Dicionário para deixar os nomes bonitos no gráfico
     nomes_bonitos = {
         'Total Distance': 'Distância',
-        'V4 Dist': 'Veloc. V4',
-        'V5 Dist': 'Sprint V5',
+        'V4 Dist': 'Distância V4',
+        'V5 Dist': 'Distância V5',
         'HIA_Total': 'HIA Total',
         'AccDec_Total': 'Acc/Dec',
-        'Player Load': 'Load'
+        'Player Load': 'Player Load'
     }
     
     maximos_time = df_agrupado[metricas_radar].max()
