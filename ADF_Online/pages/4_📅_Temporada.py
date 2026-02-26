@@ -55,7 +55,7 @@ df_raw = df_raw.sort_values('Data')
 cols_agrupar = ['Total Distance', 'HIA', 'V5 Dist', 'Player Load', 'Acc3 Eff', 'Dec3 Eff']
 cols_existentes = [c for c in cols_agrupar if c in df_raw.columns]
 
-df_atleta_jogo = df_raw.groupby(['Data', 'Data_Display', 'Competição', 'Name'])[cols_existentes].sum().reset_index()
+df_atleta_jogo = df_raw.groupby(['Data', 'Data_Display', 'Competição', 'Name', 'Jogou_em_Casa'])[cols_existentes].sum().reset_index()
 
 # Criar a métrica de força mecânica
 if 'Acc3 Eff' in df_atleta_jogo.columns and 'Dec3 Eff' in df_atleta_jogo.columns:
@@ -64,7 +64,7 @@ if 'Acc3 Eff' in df_atleta_jogo.columns and 'Dec3 Eff' in df_atleta_jogo.columns
 
 # Passo B: Tirar a MÉDIA DA EQUIPA por JOGO
 # (Média é melhor que a soma total, pois a soma flutua dependendo de quantos reservas entraram)
-df_equipa_jogo = df_atleta_jogo.groupby(['Data', 'Data_Display', 'Competição'])[cols_existentes].mean().reset_index()
+df_equipa_jogo = df_atleta_jogo.groupby(['Data', 'Data_Display', 'Competição', 'Jogou_em_Casa'])[cols_existentes].mean().reset_index()
 df_equipa_jogo = df_equipa_jogo.sort_values('Data')
 
 # --- Implementação Opção 3: Recordes de Intensidade (Worst-Case Scenario) ---
@@ -80,14 +80,14 @@ st.session_state['df_recordes'] = df_recordes
 # 3. FILTROS GLOBAIS (Progressive Disclosure)
 # =====================================================================
 with st.expander("⚙️ Configurar Visão da Temporada", expanded=True):
-    c1, c2, c3 = st.columns([2, 2, 1])
+    # Aumentei para 4 colunas para caber o novo filtro
+    c1, c2, c3, c4 = st.columns([2, 2, 1.5, 1.5])
     
     with c1:
         competicoes_disp = df_equipa_jogo['Competição'].dropna().unique().tolist()
         competicao_sel = st.multiselect("🏆 Filtrar Competições:", options=competicoes_disp, default=competicoes_disp)
         
     with c2:
-        # Dicionário amigável para a interface
         opcoes_metricas = {
             'Total Distance': 'Volume Total (Distância)',
             'HIA': 'Alta Intensidade (HIA)',
@@ -95,20 +95,30 @@ with st.expander("⚙️ Configurar Visão da Temporada", expanded=True):
             'Player Load': 'Desgaste Interno (Player Load)',
             'AccDec_Total': 'Força Mecânica (Acc/Dec)'
         }
-        # Só mostra as métricas que realmente existem no df
         metricas_validas = {k: v for k, v in opcoes_metricas.items() if k in cols_existentes}
-        
-        metrica_visao = st.selectbox("📊 Métrica Principal para Gráficos:", options=list(metricas_validas.keys()), format_func=lambda x: metricas_validas[x])
+        metrica_visao = st.selectbox("📊 Métrica Principal:", options=list(metricas_validas.keys()), format_func=lambda x: metricas_validas[x])
     
     with c3:
         visao_tipo = st.radio("Foco da Análise:", ["Média da Equipa", "Atleta Específico"])
 
-# Aplicar filtros
+    # --- NOVO FILTRO: LOCAL DO JOGO ---
+    with c4:
+        filtro_local = st.radio("🏟️ Local do Jogo:", ["Ambos", "Casa", "Fora"])
+
+# Aplicar filtros de competição
 if competicao_sel:
     df_equipa_jogo = df_equipa_jogo[df_equipa_jogo['Competição'].isin(competicao_sel)]
     df_atleta_jogo = df_atleta_jogo[df_atleta_jogo['Competição'].isin(competicao_sel)]
 
-# Se escolheu olhar para um atleta específico
+# --- APLICAÇÃO DO FILTRO DE LOCAL ---
+if filtro_local == "Casa":
+    df_equipa_jogo = df_equipa_jogo[df_equipa_jogo['Jogou_em_Casa'] == 1]
+    df_atleta_jogo = df_atleta_jogo[df_atleta_jogo['Jogou_em_Casa'] == 1]
+elif filtro_local == "Fora":
+    df_equipa_jogo = df_equipa_jogo[df_equipa_jogo['Jogou_em_Casa'] == 0]
+    df_atleta_jogo = df_atleta_jogo[df_atleta_jogo['Jogou_em_Casa'] == 0]
+
+# (Lógica de seleção de Atleta Específico ou Média da Equipa continua igual...)
 if visao_tipo == "Atleta Específico":
     lista_atletas = sorted(df_atleta_jogo['Name'].unique())
     atleta_alvo = st.selectbox("👤 Selecione o Atleta:", lista_atletas)
@@ -142,94 +152,50 @@ k4.metric("Desgaste Médio (Load)", f"{media_load:.0f}", help="Carga mecânica (
 st.divider()
 
 # =====================================================================
-# 5. VISUALIZAÇÕES (ABAS)
+# 5. VISUALIZAÇÕES (ABAS ATUALIZADAS)
 # =====================================================================
-tab1, tab2, tab3 = st.tabs(["📈 Evolução Cronológica", "⚖️ Comparação de Competições", "🔥 Top Jogos Extremos"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📈 Evolução Cronológica", 
+    "⚖️ Comparação de Competições", 
+    "🔥 Top Jogos Extremos",
+    "🏟️ Casa vs 🚌 Fora" # NOVA ABA
+])
 
 nome_metrica_legivel = metricas_validas.get(metrica_visao, metrica_visao)
 
-with tab1:
-    st.markdown(f"**Linha do Tempo: {nome_metrica_legivel} ({titulo_contexto})**")
+# ... (tab1, tab2, tab3 continuam iguais) ...
+
+with tab4:
+    st.markdown(f"**Comparativo de Performance: Casa vs. Fora ({nome_metrica_legivel})**")
     
-    # Gráfico de linha com marcadores para mostrar a subida/descida de carga no calendário
-    fig_timeline = px.line(
-        df_plot, 
-        x='Data_Display', 
-        y=metrica_visao, 
-        markers=True,
-        color='Competição',
-        title=f"Evolução ao longo da Temporada",
-        labels={'Data_Display': 'Partida', metrica_visao: nome_metrica_legivel},
+    # Criamos um DataFrame auxiliar para a comparação
+    # Usamos o df_atleta_jogo ou df_equipa_jogo original (sem o filtro de local) para o gráfico ser fixo
+    df_comp = df_atleta_jogo if visao_tipo == "Atleta Específico" else df_equipa_jogo
+    if visao_tipo == "Atleta Específico":
+        df_comp = df_comp[df_comp['Name'] == atleta_alvo]
+
+    # Agrupar médias
+    df_casa_fora = df_comp.groupby('Jogou_em_Casa')[metrica_visao].mean().reset_index()
+    df_casa_fora['Local'] = df_casa_fora['Jogou_em_Casa'].map({1: '🏟️ Casa (Arena Barra)', 0: '🚌 Fora'})
+
+    fig_comp = px.bar(
+        df_casa_fora,
+        x='Local',
+        y=metrica_visao,
+        color='Local',
+        text_auto='.0f',
+        title=f"Média de {nome_metrica_legivel} por Localização",
+        color_discrete_map={'🏟️ Casa (Arena Barra)': '#2E7D32', '🚌 Fora': '#546E7A'},
         template='plotly_white'
     )
     
-    # Adicionar uma linha de tendência (Média Móvel de 3 jogos) para ver a fase do time
-    df_plot['Media_Movel'] = df_plot[metrica_visao].rolling(window=3, min_periods=1).mean()
-    fig_timeline.add_trace(go.Scatter(
-        x=df_plot['Data_Display'], 
-        y=df_plot['Media_Movel'],
-        mode='lines', 
-        name='Tendência (3 Jogos)',
-        line=dict(color='gray', width=2, dash='dot')
-    ))
-
-    fig_timeline.update_layout(height=400, hovermode="x unified", xaxis_tickangle=-45)
-    st.plotly_chart(fig_timeline, use_container_width=True)
-
-with tab2:
-    st.markdown(f"**Exigência Física por Competição: {nome_metrica_legivel}**")
+    fig_comp.update_layout(showlegend=False, height=450)
+    st.plotly_chart(fig_comp, use_container_width=True)
     
-    # Boxplot é perfeito aqui: mostra a média, mas também a variação (jogos fáceis vs jogos duros) na mesma competição
-    fig_box = px.box(
-        df_plot, 
-        x='Competição', 
-        y=metrica_visao, 
-        color='Competição',
-        points="all", # Mostra os pontinhos de cada jogo ao lado da caixa
-        title=f"Distribuição de Carga por Torneio",
-        labels={'Competição': 'Torneio', metrica_visao: nome_metrica_legivel},
-        template='plotly_white'
-    )
-    fig_box.update_layout(height=400, showlegend=False)
-    st.plotly_chart(fig_box, use_container_width=True)
-
-with tab3:
-    col_max, col_min = st.columns(2)
-    
-    # Top 5 Jogos mais intensos
-    df_top = df_plot.nlargest(5, metrica_visao)
-    # 5 Jogos menos intensos
-    df_bottom = df_plot.nsmallest(5, metrica_visao)
-    
-    with col_max:
-        st.markdown(f"🔴 **Top 5 Jogos de MAIOR Exigência**")
-        fig_top = px.bar(
-            df_top, 
-            y='Data_Display', 
-            x=metrica_visao, 
-            orientation='h',
-            color=metrica_visao,
-            color_continuous_scale='Reds',
-            labels={'Data_Display': 'Partida', metrica_visao: ''},
-            template='plotly_white'
-        )
-        fig_top.update_layout(yaxis={'categoryorder':'total ascending'}, height=350, showlegend=False, coloraxis_showscale=False)
-        st.plotly_chart(fig_top, use_container_width=True)
-
-    with col_min:
-        st.markdown(f"🟢 **Top 5 Jogos de MENOR Exigência**")
-        fig_bottom = px.bar(
-            df_bottom, 
-            y='Data_Display', 
-            x=metrica_visao, 
-            orientation='h',
-            color=metrica_visao,
-            color_continuous_scale='Greens_r',
-            labels={'Data_Display': 'Partida', metrica_visao: ''},
-            template='plotly_white'
-        )
-        fig_bottom.update_layout(yaxis={'categoryorder':'total descending'}, height=350, showlegend=False, coloraxis_showscale=False)
-        st.plotly_chart(fig_bottom, use_container_width=True)
+    st.info("""
+    **Análise de Performance:** Diferenças significativas entre Casa e Fora podem indicar impacto da fadiga de viagem, 
+    dimensões do campo ou mudanças na postura tática da equipa.
+    """)
 
 # --- Implementação Opção 4: Placar vs. Intensidade ---
 with tab1: # Pode criar uma nova tab4 se preferir

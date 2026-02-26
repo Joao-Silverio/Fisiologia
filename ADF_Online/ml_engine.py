@@ -7,7 +7,7 @@ import os
 import pickle
 import numpy as np
 import pandas as pd
-import config 
+import config
 
 MAPA_METRICAS = {
     'Dist_Total': 'Total Distance',
@@ -110,6 +110,15 @@ def executar_ml_ao_vivo(
 
     dias_desc = calcular_dias_descanso(df_historico, pd.to_datetime(jogo_atual_nome)) if hasattr(jogo_atual_nome, 'year') or isinstance(jogo_atual_nome, str) else 7
 
+    # 1. DEFINIR VALOR PADRÃO LOGO NO INÍCIO
+    jogou_em_casa_val = 1 
+    
+    # 2. TENTAR CAPTURAR O VALOR REAL DO DATASET
+    if 'Jogou_em_Casa' in df_atual.columns:
+        jogou_em_casa_val = df_atual['Jogou_em_Casa'].iloc[-1]
+    elif 'Jogou_em_Casa' in df_historico.columns:
+        jogou_em_casa_val = df_historico['Jogou_em_Casa'].iloc[-1]
+    
     def soma_jogo(col):
         return df_historico.groupby(coluna_jogo)[col].sum().mean() if col in df_historico.columns else 0
 
@@ -140,6 +149,7 @@ def executar_ml_ao_vivo(
             'N_Jogos': df_historico[coluna_jogo].nunique(),
             'Carga_3Jogos_PL': carga_3jogos_pl,
             'Diff_Gols': 1 if resultado_ctx == 'V' else (-1 if resultado_ctx == 'D' else 0),
+            'Jogou_em_Casa': jogou_em_casa_val,
             f'{metric_target}_Acumulado_Agora': carga_atual,
             f'Media_Geral_{metric_target}': media_geral_num,
             f'Trend_{metric_target}': trend_dist

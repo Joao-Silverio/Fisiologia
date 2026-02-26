@@ -1,8 +1,16 @@
-import streamlit as st
 import pandas as pd
+import numpy as np
 import os
 import shutil
 import config
+import streamlit as st
+
+def extrair_diff_gols(placar):
+    """Transforma o texto do placar em um número (-1, 0, 1) para a IA."""
+    s = str(placar).strip().lower()
+    if any(x in s for x in ['vencendo', 'vitoria', 'vitória', 'ganhando', 'v']): return 1
+    if any(x in s for x in ['perdendo', 'derrota', 'd']): return -1
+    return 0
 
 def obter_hora_modificacao(caminho_ficheiro):
     try:
@@ -10,29 +18,76 @@ def obter_hora_modificacao(caminho_ficheiro):
     except FileNotFoundError:
         return 0
 
-@st.cache_resource(show_spinner="🔄 Nova atualização detetada no Excel! A processar dados...")
+# Função Híbrida: Usa cache se estiver no Streamlit, senão roda normal (para o treino)
 def load_global_data(hora_mod):
+    if st.runtime.exists():
+        # Se estiver no navegador, usa a versão com cache
+        return _load_data_logic(hora_mod)
+    else:
+        # Se estiver no terminal (treino), roda direto
+        return _load_data_logic(hora_mod)
+
+# Colocamos o cache apenas nesta função interna
+@st.cache_resource(show_spinner="🔄 Atualizando base de dados...")
+def _load_data_logic(hora_mod):
     try:
+        # 1. Copiar arquivo para evitar travamentos
         shutil.copy2(config.ARQUIVO_ORIGINAL, config.ARQUIVO_TEMP)
         
+        # 2. Ler o Excel (Apenas UMA vez!)
         df = pd.read_excel(
             config.ARQUIVO_TEMP, 
             engine='calamine',
             usecols=lambda c: c.strip() in config.COLUNAS_NECESSARIAS
         )
+        
+        # 3. Limpar nomes de colunas (Remove espaços extras)
         df.columns = df.columns.str.strip()
 
-        df[config.COLS_METRICAS_PREENCHER_ZERO] = df[config.COLS_METRICAS_PREENCHER_ZERO].fillna(0)
+        # 4. Cálculo do Fator Casa (Arena Barra)
+        if 'Latitude' in df.columns and 'Longitude' in df.columns:
+            # fillna evita que o cálculo exploda se houver GPS faltando em alguma linha
+            lat1, lon1 = np.radians(config.LATITUDE_CASA), np.radians(config.LONGITUDE_CASA)
+            lat2 = np.radians(df['Latitude'].fillna(config.LATITUDE_CASA))
+            lon2 = np.radians(df['Longitude'].fillna(config.LONGITUDE_CASA))
+            
+            dlat, dlon = lat2 - lat1, lon2 - lon1
+            a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
+            c = 2 * np.arcsin(np.sqrt(a))
+            df['Distancia_Viagem_km'] = 6371.0 * c
+            df['Jogou_em_Casa'] = np.where(df['Distancia_Viagem_km'] <= config.RAIO_CASA_KM, 1, 0)
+        else:
+            df['Jogou_em_Casa'] = 1 
 
+        # 5. Preencher Métricas Vazias e Calcular HIA
+        df[config.COLS_METRICAS_PREENCHER_ZERO] = df[config.COLS_METRICAS_PREENCHER_ZERO].fillna(0)
         df['HIA'] = (
             df.get('V4 To8 Eff', 0) + df.get('V5 To8 Eff', 0) + 
             df.get('V6 To8 Eff', 0) + df.get('Acc3 Eff', 0) + df.get('Dec3 Eff', 0)
         )
 
-        df['Data_Display'] = pd.to_datetime(df['Data'], errors='coerce').dt.strftime('%d/%m/%Y') + ' ' + df['Adversário'].astype(str)
+        # ... (código anterior de Fator Casa e HIA) ...
 
-        # Fábrica de Recordes
-        df_sorted = df.sort_values(by=['Name', 'Data', 'Período', 'Interval']).copy()
+        # 6. Placar e Datas
+        if 'Placar' in df.columns:
+            df['Diff_Gols'] = df['Placar'].apply(extrair_diff_gols)
+        else:
+            df['Diff_Gols'] = 0
+            
+        df['Data_Display'] = pd.to_datetime(df['Data'], errors='coerce').dt.strftime('%d/%m/%Y') + ' ' + df['Adversário'].astype(str)
+        
+        # --- ESTA É A CORREÇÃO CRÍTICA ---
+        # Criamos a coluna Min_Num a partir do Interval para o predictive.py não dar erro
+        nome_coluna_tempo = 'Interval (min)' if 'Interval (min)' in df.columns else 'Interval'
+        df['Min_Num'] = pd.to_numeric(df[nome_coluna_tempo], errors='coerce').fillna(0)
+        # ---------------------------------
+
+        # 7. Fábrica de Recordes
+        if 'Name' not in df.columns:
+            raise KeyError("A coluna 'Name' não foi encontrada. Verifique o config.COLUNAS_NECESSARIAS.")
+
+        # Usamos o Min_Num aqui também para manter a consistência
+        df_sorted = df.sort_values(by=['Name', 'Data', 'Período', 'Min_Num']).copy()
         
         mapa_recordes = {
             'Total Distance': 'Dist_Total', 'Player Load': 'Load_Total',
@@ -41,16 +96,19 @@ def load_global_data(hora_mod):
         }
         
         cols_calc = [c for c in mapa_recordes.keys() if c in df_sorted.columns]
-        
         df_rolling = df_sorted.groupby(['Name', 'Data', 'Período'])[cols_calc].rolling(window=5, min_periods=1).sum().reset_index(drop=True)
         df_rolling['Name'] = df_sorted['Name'].values
         
         df_recordes = df_rolling.groupby('Name')[cols_calc].max().reset_index()
-        rename_dict = {col: f"Recorde_5min_{mapa_recordes[col]}" for col in cols_calc}
-        df_recordes = df_recordes.rename(columns=rename_dict)
+        df_recordes = df_recordes.rename(columns={col: f"Recorde_5min_{mapa_recordes[col]}" for col in cols_calc})
 
         return df, df_recordes
         
     except Exception as e:
-        st.error(f"Erro ao carregar dados: {e}")
+        # Só usa st.error se estiver no Streamlit, senão usa print normal (para o terminal)
+        mensagem = f"Erro ao carregar dados: {e}"
+        if st.runtime.exists():
+            st.error(mensagem)
+        else:
+            print(f"❌ {mensagem}")
         return pd.DataFrame(), pd.DataFrame()

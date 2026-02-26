@@ -15,6 +15,8 @@ import pickle
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import xgboost as xgb
+import config
+from data_loader import load_global_data
 
 warnings.filterwarnings('ignore')
 
@@ -43,28 +45,14 @@ MAPA_METRICAS = {
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. CARREGAR DADOS
 # ─────────────────────────────────────────────────────────────────────────────
-print("\n[1/4] Carregando e estruturando os dados base...")
-df = pd.read_excel(CAMINHO_EXCEL, engine='calamine')
-df.columns = df.columns.str.strip()
-df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
-df = df.dropna(subset=['Data', 'Name', 'Interval', 'Período'])
+print("\n[1/4] Carregando dados prontos para o Treino...")
+df, _ = load_global_data(0)
 
-df['Min_Num'] = pd.to_numeric(df['Interval (min)' if 'Interval (min)' in df.columns else 'Interval'], errors='coerce').fillna(0)
-df = df[df['Período'].isin([1, 2])]
-df = df.sort_values(['Name', 'Data', 'Período', 'Min_Num']).reset_index(drop=True)
+if df is None:
+    print("❌ Falha ao carregar dados. Abortando.")
+    exit()
 
-for col in MAPA_METRICAS.values():
-    if col != 'HIA' and col not in df.columns: df[col] = 0
-
-hia_cols = ['V4 To8 Eff', 'V5 To8 Eff', 'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff']
-df['HIA'] = df[[c for c in hia_cols if c in df.columns]].sum(axis=1)
-
-def extrair_diff_gols(placar):
-    s = str(placar).strip().lower()
-    if any(x in s for x in ['vencendo', 'vitoria', 'vitória', 'ganhando', 'v']): return 1
-    if any(x in s for x in ['perdendo', 'derrota', 'd']): return -1
-    return 0
-df['Diff_Gols'] = df['Placar'].apply(extrair_diff_gols) if 'Placar' in df.columns else 0
+# O df já vem com: HIA, Jogou_em_Casa, Diff_Gols e Fillna(0).
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. HISTÓRICO COM TARGET EQUIVALENTE (EQ45/EQ50)
@@ -74,7 +62,8 @@ df_jogos = df.groupby(['Name', 'Data', 'Período']).agg({
     'Total Distance': 'sum', 'Player Load': 'sum', 'V4 Dist': 'sum',
     'V5 Dist': 'sum', 'V4 To8 Eff': 'sum', 'V5 To8 Eff': 'sum', 'HIA': 'sum',
     'Diff_Gols': 'last',
-    'Min_Num': 'max'  # Descobrimos exatamente em que minuto ele saiu
+    'Min_Num': 'max', # Descobrimos exatamente em que minuto ele saiu
+    'Jogou_em_Casa' : 'first'  #Jogo em casa ou Fora
 }).reset_index()
 df_jogos.rename(columns={'Min_Num': 'Minutos_Jogados'}, inplace=True)
 
@@ -136,7 +125,7 @@ for metric_target in MAPA_METRICAS.keys():
         'Dias_Descanso', 
         'N_Jogos', 
         'Carga_3Jogos_PL',
-        'Diff_Gols',
+        'Diff_Gols', 'Jogou_em_Casa',
         f'{metric_target}_Acumulado_Agora',   
         f'Media_Geral_{metric_target}',       
         f'Trend_{metric_target}'              

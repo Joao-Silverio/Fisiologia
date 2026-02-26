@@ -13,11 +13,21 @@ DIRETORIO_MODELOS = os.path.join(BASE_DIR, 'Models')
 # Adiciona Logo:
 CAMINHO_LOGO = os.path.join(BASE_DIR, 'BarraFC.png')
 
+# =================================================================
+# CONFIGURAÇÕES DE GEOLOCALIZAÇÃO (FATOR CASA)
+# =================================================================
+# Arena Barra FC - Canhanduba (Itajaí, SC)
+LATITUDE_CASA = -26.948597   # Coordenada exata do centro do campo
+LONGITUDE_CASA = -48.674744
+
+# Distância máxima (em km) para o jogo ser considerado "Em Casa"
+RAIO_CASA_KM = 2.0
+
 # ==========================================
 # 2. COLUNAS DA BASE DE DADOS
 # ==========================================
 COLUNAS_NECESSARIAS = [
-    'Data', 'Interval', 'Name', 'Período', 'Placar', 'Resultado', 'Adversário',
+    'Name', 'Data', 'Interval', 'Name', 'Período', 'Placar', 'Resultado', 'Adversário',
     'Total Distance', 'V4 Dist', 'V5 Dist', 'V4 To8 Eff', 'V5 To8 Eff', 
     'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Player Load',
     'Parte (15 min)', 'Parte (5 min)', 'Parte (3 min)', 'Competição', 'Metabolic Power'
