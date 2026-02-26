@@ -297,7 +297,12 @@ for periodo in [1, 2]:
             # =====================================================================
             # RENDERIZAÇÃO NA TELA (COM HELP / TOOLTIPS)
             # =====================================================================
-            def fmt_dist(x): return f"{x:.0f}{unidade}" if not np.isnan(x) else "N/A"
+            def fmt_dist(x):
+                if metrica_selecionada in ["Total Distance", "V4 Dist", "V5 Dist"]:
+                    return f"{x:.2f}{unidade}" if not np.isnan(x) else "N/A"
+                else:
+                    return f"{x:.0f}{unidade}" if not np.isnan(x) else "N/A"
+                    
             def fmt_pct(x): return f"{x:+.1f}%" if not np.isnan(x) else "N/A"
 
             k0, k1, k2, k3, k4, k5, k6 = st.columns(7)
@@ -384,6 +389,11 @@ for periodo in [1, 2]:
                     help=f"Soma o esforço nos 5 minutos antes do corte e compara com o recorde absoluto do atleta na temporada."
                 )
 
+            if metrica_selecionada in ["Total Distance", "V4 Dist", "V5 Dist"]:
+                hover_formato = "%{y:.2f}" + unidade
+            else:
+                hover_formato = "%{y:.0f}" + unidade
+            
             fig = go.Figure()
             
             # Linhas do passado (Histórico)
@@ -397,7 +407,7 @@ for periodo in [1, 2]:
                         x=df_j[coluna_minuto], y=df_j[coluna_acumulada], mode='lines',
                         name=jogo_display, opacity=0.45, 
                         line=dict(color=colors[idx % len(colors)], width=2.5), 
-                        hovertemplate=f'<b>{jogo_display}</b><br>Valor: %{{y:.1f}}m<extra></extra>' 
+                        hovertemplate=f'<b>{{jogo_display}}</b><br>Valor: {hover_formato}<extra></extra>'
                     ))
 
             # PLOTA A LINHA VERDE COMPLETA (O QUE ELE REALMENTE FEZ NO JOGO TODO)
@@ -405,7 +415,7 @@ for periodo in [1, 2]:
             fig.add_trace(go.Scatter(
                 x=df_atual[coluna_minuto], y=df_atual[coluna_acumulada], mode='lines',
                 name=f'{jogo_display} (Realizado)', line=dict(color='#00E676', width=4), 
-                hovertemplate='Realizado: %{y:.1f}m<extra></extra>'
+                hovertemplate=f'Realizado: {hover_formato}<extra></extra>'
             ))
 
             # PLOTA A PROJEÇÃO QUE COMEÇA DO PONTO DE CORTE
@@ -417,7 +427,7 @@ for periodo in [1, 2]:
                 ))
                 fig.add_trace(go.Scatter(
                     x=minutos_futuros, y=acumulado_pred, mode='lines', name='Projeção a partir do Corte',
-                    line=dict(color='#FF8C00', width=3, dash='dash'), hovertemplate='Projeção: %{y:.1f}m<extra></extra>'
+                    line=dict(color='#FF8C00', width=3, dash='dash'), hovertemplate=f'Projeção: {hover_formato}<extra></extra>'
                 ))
                 
                 # Linha vertical vermelha indicando onde a IA fez a projeção
