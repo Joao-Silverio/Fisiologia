@@ -158,50 +158,30 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "📈 Evolução Cronológica", 
     "⚖️ Comparação de Competições", 
     "🔥 Top Jogos Extremos",
-    "🏟️ Casa vs 🚌 Fora" # NOVA ABA
+    "🏟️ Casa vs 🚌 Fora"
 ])
 
 nome_metrica_legivel = metricas_validas.get(metrica_visao, metrica_visao)
 
-# ... (tab1, tab2, tab3 continuam iguais) ...
-
-with tab4:
-    st.markdown(f"**Comparativo de Performance: Casa vs. Fora ({nome_metrica_legivel})**")
+# --- ABA 1: EVOLUÇÃO CRONOLÓGICA E PLACAR ---
+with tab1:
+    st.markdown(f"**Evolução de {nome_metrica_legivel} ao Longo da Temporada**")
     
-    # Criamos um DataFrame auxiliar para a comparação
-    # Usamos o df_atleta_jogo ou df_equipa_jogo original (sem o filtro de local) para o gráfico ser fixo
-    df_comp = df_atleta_jogo if visao_tipo == "Atleta Específico" else df_equipa_jogo
-    if visao_tipo == "Atleta Específico":
-        df_comp = df_comp[df_comp['Name'] == atleta_alvo]
-
-    # Agrupar médias
-    df_casa_fora = df_comp.groupby('Jogou_em_Casa')[metrica_visao].mean().reset_index()
-    df_casa_fora['Local'] = df_casa_fora['Jogou_em_Casa'].map({1: '🏟️ Casa (Arena Barra)', 0: '🚌 Fora'})
-
-    fig_comp = px.bar(
-        df_casa_fora,
-        x='Local',
-        y=metrica_visao,
-        color='Local',
-        text_auto='.0f',
-        title=f"Média de {nome_metrica_legivel} por Localização",
-        color_discrete_map={'🏟️ Casa (Arena Barra)': '#2E7D32', '🚌 Fora': '#546E7A'},
+    fig_line = px.line(
+        df_plot, 
+        x='Data_Display', 
+        y=metrica_visao, 
+        markers=True,
+        title=f"Tendência de {nome_metrica_legivel} ({titulo_contexto})",
         template='plotly_white'
     )
-    
-    fig_comp.update_layout(showlegend=False, height=450)
-    st.plotly_chart(fig_comp, use_container_width=True)
-    
-    st.info("""
-    **Análise de Performance:** Diferenças significativas entre Casa e Fora podem indicar impacto da fadiga de viagem, 
-    dimensões do campo ou mudanças na postura tática da equipa.
-    """)
+    fig_line.update_layout(xaxis_title="Data / Adversário", yaxis_title=nome_metrica_legivel)
+    st.plotly_chart(fig_line, use_container_width=True)
 
-# --- Implementação Opção 4: Placar vs. Intensidade ---
-with tab1: # Pode criar uma nova tab4 se preferir
+    st.divider()
+
     st.markdown("### 🏟️ Comportamento Tático-Físico (Placar vs. HIA)")
-    
-    # Agrupamos a intensidade média por status do placar
+    # Agrupamos a intensidade média por status do placar olhando para toda a base
     df_placar_int = df_raw.groupby('Placar')['HIA'].mean().reset_index()
     
     fig_placar = px.bar(
@@ -211,8 +191,87 @@ with tab1: # Pode criar uma nova tab4 se preferir
         color='Placar',
         title="Intensidade Média da Equipe por Condição do Jogo",
         labels={'HIA': 'Média de Ações Intensas (HIA)'},
-        color_discrete_map=config.MAPA_CORES_PLACAR, # Usando o mapa de cores do config.py
+        color_discrete_map=config.MAPA_CORES_PLACAR, 
         template='plotly_white'
     )
+    st.plotly_chart(fig_placar, use_container_width=True)
+    st.info("💡 Este gráfico revela se a equipe mantém a intensidade alta mesmo quando está em vantagem ou se há um relaxamento físico.")
+
+# --- ABA 2: COMPARAÇÃO DE COMPETIÇÕES ---
+with tab2:
+    st.markdown(f"**Média de {nome_metrica_legivel} por Competição**")
+    
+    if 'Competição' in df_plot.columns and not df_plot.empty:
+        df_comp_bar = df_plot.groupby('Competição')[metrica_visao].mean().reset_index()
+        
+        fig_comp = px.bar(
+            df_comp_bar,
+            x='Competição',
+            y=metrica_visao,
+            color='Competição',
+            text_auto='.0f',
+            title=f"Comparativo: {nome_metrica_legivel}",
+            template='plotly_white'
+        )
+        fig_comp.update_layout(showlegend=False)
+        st.plotly_chart(fig_comp, use_container_width=True)
+    else:
+        st.warning("Não há dados de Competição suficientes para gerar este gráfico.")
+
+# --- ABA 3: TOP JOGOS EXTREMOS ---
+with tab3:
+    st.markdown(f"**Top 5 Jogos de Maior Exigência ({nome_metrica_legivel})**")
+    
+    if not df_plot.empty:
+        df_top = df_plot.sort_values(by=metrica_visao, ascending=False).head(5)
+        
+        fig_top = px.bar(
+            df_top,
+            x='Data_Display',
+            y=metrica_visao,
+            text_auto='.0f',
+            color=metrica_visao,
+            color_continuous_scale='Reds',
+            title=f"Jogos Mais Intensos ({titulo_contexto})",
+            template='plotly_white'
+        )
+        fig_top.update_layout(xaxis_title="Data / Adversário", yaxis_title=nome_metrica_legivel)
+        st.plotly_chart(fig_top, use_container_width=True)
+    else:
+        st.warning("Não há dados suficientes para gerar os Top Jogos.")
+
+# --- ABA 4: CASA VS FORA ---
+with tab4:
+    st.markdown(f"**Comparativo de Performance: Casa vs. Fora ({nome_metrica_legivel})**")
+    
+    # Criamos um DataFrame auxiliar para a comparação ignorando o filtro global de Local
+    df_comp_local = df_atleta_jogo if visao_tipo == "Atleta Específico" else df_equipa_jogo
+    if visao_tipo == "Atleta Específico":
+        df_comp_local = df_comp_local[df_comp_local['Name'] == atleta_alvo]
+
+    if not df_comp_local.empty and 'Jogou_em_Casa' in df_comp_local.columns:
+        df_casa_fora = df_comp_local.groupby('Jogou_em_Casa')[metrica_visao].mean().reset_index()
+        df_casa_fora['Local'] = df_casa_fora['Jogou_em_Casa'].map({1: '🏟️ Casa (Arena Barra)', 0: '🚌 Fora'})
+
+        fig_comp_local = px.bar(
+            df_casa_fora,
+            x='Local',
+            y=metrica_visao,
+            color='Local',
+            text_auto='.0f',
+            title=f"Média de {nome_metrica_legivel} por Localização",
+            color_discrete_map={'🏟️ Casa (Arena Barra)': '#2E7D32', '🚌 Fora': '#546E7A'},
+            template='plotly_white'
+        )
+        
+        fig_comp_local.update_layout(showlegend=False, height=450)
+        st.plotly_chart(fig_comp_local, use_container_width=True)
+        
+        st.info("""
+        **Análise de Performance:** Diferenças significativas entre Casa e Fora podem indicar impacto da fadiga de viagem, 
+        dimensões do campo ou mudanças na postura tática da equipa.
+        """)
+    else:
+        st.warning("Não há dados suficientes sobre o Local do Jogo.")
     st.plotly_chart(fig_placar, use_container_width=True)
     st.info("💡 Este gráfico revela se a equipe mantém a intensidade alta mesmo quando está em vantagem ou se há um relaxamento físico.")
