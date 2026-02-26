@@ -407,7 +407,7 @@ for periodo in [1, 2]:
                         x=df_j[coluna_minuto], y=df_j[coluna_acumulada], mode='lines',
                         name=jogo_display, opacity=0.45, 
                         line=dict(color=colors[idx % len(colors)], width=2.5), 
-                        hovertemplate=f'<b>{{jogo_display}}</b><br>Valor: {hover_formato}<extra></extra>'
+                        hovertemplate=f'<b>{jogo_display}</b><br>Valor: {hover_formato}<extra></extra>'
                     ))
 
             # PLOTA A LINHA VERDE COMPLETA (O QUE ELE REALMENTE FEZ NO JOGO TODO)
@@ -415,7 +415,7 @@ for periodo in [1, 2]:
             fig.add_trace(go.Scatter(
                 x=df_atual[coluna_minuto], y=df_atual[coluna_acumulada], mode='lines',
                 name=f'{jogo_display} (Realizado)', line=dict(color='#00E676', width=4), 
-                hovertemplate=f'Realizado: {hover_formato}<extra></extra>'
+                hovertemplate=f'<b>{jogo_display} (Realizado)</b><br>Valor: {hover_formato}<extra></extra>'
             ))
 
             # PLOTA A PROJEÇÃO QUE COMEÇA DO PONTO DE CORTE
