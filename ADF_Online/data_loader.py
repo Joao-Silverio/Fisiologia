@@ -37,14 +37,17 @@ def _load_data_logic(hora_mod):
         # 2. Ler o Excel (Apenas UMA vez!)
         df = pd.read_excel(
             config.ARQUIVO_TEMP, 
-            engine='calamine',
+            engine='calamine', decimal = ',', #Explica que o separador decimal é um vírgula
             usecols=lambda c: c.strip() in config.COLUNAS_NECESSARIAS
         )
         
         # 3. Limpar nomes de colunas (Remove espaços extras)
         df.columns = df.columns.str.strip()
+        for col in ['Latitude', 'Longitude']
+            if col in df.cloumns:
+                df[col] = pd.to_numeric(df[col].astype(str).str.replace(',','.'), errors = 'coerce') #Blindagem para Latitude Longitude
 
-        # 4. Cálculo do Fator Casa (Arena Barra)
+        # 4. Cálculo do Fator Casa (Arena Barra)        
         if 'Latitude' in df.columns and 'Longitude' in df.columns:
             # fillna evita que o cálculo exploda se houver GPS faltando em alguma linha
             lat1, lon1 = np.radians(config.LATITUDE_CASA), np.radians(config.LONGITUDE_CASA)
