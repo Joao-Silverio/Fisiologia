@@ -128,17 +128,17 @@ c3.markdown(f"<h4 style='text-align: left; color: #42A5F5; margin-bottom: 0;'>�
 col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5, col_kpi6 = st.columns(6)
 
 def kpi_card(col, label, val1, val2, unidade=""):
-    # Cores ligeiramente mais vivas para brilharem e terem contraste no Dark Mode
+    # Cores vivas para brilharem no Dark Mode
     cor1 = "#4CAF50" if val1 > val2 else "#EF5350" if val1 < val2 else "gray" 
     cor2 = "#4CAF50" if val2 > val1 else "#EF5350" if val2 < val1 else "gray"
     
     with col:
         st.markdown(f"""
-        <div style='background-color: var(--secondary-background-color); 
+        <div style='background-color: rgba(130, 130, 130, 0.15); 
                     padding: 15px 5px; 
                     border-radius: 10px; 
-                    border: 1px solid rgba(128, 128, 128, 0.2); 
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    border: 1px solid rgba(130, 130, 130, 0.4); 
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
                     display: flex; 
                     flex-direction: column; 
                     justify-content: center; 
@@ -193,17 +193,49 @@ with col_radar:
     val1_norm = (df_a1[metricas_radar] / maximos_time * 100).fillna(0).tolist()
     val2_norm = (df_a2[metricas_radar] / maximos_time * 100).fillna(0).tolist()
     
-    # Fechar o círculo do radar
+    # 1. EXTRAIR OS VALORES REAIS ORIGINAIS (BÓNUS PARA MOSTRAR NO BALÃO)
+    val1_orig = df_a1[metricas_radar].fillna(0).tolist()
+    val2_orig = df_a2[metricas_radar].fillna(0).tolist()
+    
+    # Fechar o círculo do radar para a linha conectar o fim ao início
     val1_norm += [val1_norm[0]]
     val2_norm += [val2_norm[0]]
+    val1_orig += [val1_orig[0]]  # Fechar também os valores reais
+    val2_orig += [val2_orig[0]]  
     
     # Aplicar os nomes curtos e bonitos no eixo do radar
     categorias_labels = [nomes_bonitos.get(m, m) for m in metricas_radar]
     categorias_labels += [categorias_labels[0]]
     
     fig_radar = go.Figure()
-    fig_radar.add_trace(go.Scatterpolar(r=val1_norm, theta=categorias_labels, fill='toself', name=atleta_1, line_color='#EF5350', fillcolor='rgba(239, 83, 80, 0.4)'))
-    fig_radar.add_trace(go.Scatterpolar(r=val2_norm, theta=categorias_labels, fill='toself', name=atleta_2, line_color='#42A5F5', fillcolor='rgba(66, 165, 245, 0.4)'))
+    
+    # Atleta 1
+    fig_radar.add_trace(go.Scatterpolar(
+        r=val1_norm, 
+        theta=categorias_labels, 
+        fill='toself', 
+        name=atleta_1, 
+        line_color='#EF5350', 
+        fillcolor='rgba(239, 83, 80, 0.4)',
+        mode='lines+markers',           # <-- Adiciona os pequenos pontos na ponta
+        hoveron='points',               # <-- O Segredo: O rato passa a ignorar as sobreposições de preenchimento!
+        customdata=val1_orig,           # <-- Passamos o valor absoluto
+        hovertemplate='<b>%{theta}</b><br>Valor Real: %{customdata:.0f}<br>Escala (%): %{r:.1f}%<extra></extra>'
+    ))
+    
+    # Atleta 2
+    fig_radar.add_trace(go.Scatterpolar(
+        r=val2_norm, 
+        theta=categorias_labels, 
+        fill='toself', 
+        name=atleta_2, 
+        line_color='#42A5F5', 
+        fillcolor='rgba(66, 165, 245, 0.4)',
+        mode='lines+markers',           
+        hoveron='points',               
+        customdata=val2_orig,           
+        hovertemplate='<b>%{theta}</b><br>Valor Real: %{customdata:.0f}<br>Escala (%): %{r:.1f}%<extra></extra>'
+    ))
 
     fig_radar.update_layout(
         polar=dict(radialaxis=dict(visible=True, range=[0, 100], ticksuffix="%")),
