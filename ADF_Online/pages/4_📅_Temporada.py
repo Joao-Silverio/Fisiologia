@@ -268,5 +268,3 @@ with tab4:
         """)
     else:
         st.warning("Não há dados suficientes sobre o Local do Jogo.")
-    st.plotly_chart(fig_placar, width="stretch")
-    st.info("💡 Este gráfico revela se a equipe mantém a intensidade alta mesmo quando está em vantagem ou se há um relaxamento físico.")
