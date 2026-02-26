@@ -43,25 +43,41 @@ def _load_data_logic(hora_mod):
         
         # 3. Limpar nomes de colunas (Remove espaços extras)
         df.columns = df.columns.str.strip()
-        
+
+        # SUPER BLINDAGEM DA VÍRGULA, ESPAÇOS E TEXTOS
         for col in ['Latitude', 'Longitude']: 
             if col in df.columns: 
-                df[col] = pd.to_numeric(df[col].astype(str).str.replace(',','.'), errors='coerce') #Blindagem para Latitude Longitude
+                # Converte para texto, arranca espaços invisíveis e troca a vírgula por ponto
+                sujeira_limpa = df[col].astype(str).str.replace(' ', '', regex=False).str.replace(',', '.', regex=False)
+                # Garante que textos vazios não quebrem o conversor
+                sujeira_limpa = sujeira_limpa.replace(['nan', 'NaN', 'None', ''], np.nan)
+                
+                # Força a conversão para número decimal rigoroso
+                df[col] = pd.to_numeric(sujeira_limpa, errors='coerce') 
 
-        # 4. Cálculo do Fator Casa (Arena Barra)        
+        # 4. Cálculo do Fator Casa (Arena Barra) com Inteligência de Equipe      
         if 'Latitude' in df.columns and 'Longitude' in df.columns:
-            # fillna evita que o cálculo exploda se houver GPS faltando em alguma linha
             lat1, lon1 = np.radians(config.LATITUDE_CASA), np.radians(config.LONGITUDE_CASA)
-            lat2 = np.radians(df['Latitude'].fillna(config.LATITUDE_CASA))
-            lon2 = np.radians(df['Longitude'].fillna(config.LONGITUDE_CASA))
+            # Deixamos os vazios (NaN) intactos por enquanto para a matemática
+            lat2 = np.radians(df['Latitude']) 
+            lon2 = np.radians(df['Longitude'])
             
             dlat, dlon = lat2 - lat1, lon2 - lon1
             a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
             c = 2 * np.arcsin(np.sqrt(a))
             df['Distancia_Viagem_km'] = 6371.0 * c
-            df['Jogou_em_Casa'] = np.where(df['Distancia_Viagem_km'] <= config.RAIO_CASA_KM, 1, 0)
+            
+            # Cria a marcação linha a linha: 1 = Casa, 0 = Fora, NaN = Sem GPS na linha
+            df.loc[df['Distancia_Viagem_km'] <= config.RAIO_CASA_KM, 'Status_Local'] = 1
+            df.loc[df['Distancia_Viagem_km'] > config.RAIO_CASA_KM, 'Status_Local'] = 0
+            
+            # Sabedoria de Equipe: 
+            # Agrupa pelo dia do jogo (Data). Se algum atleta jogou Fora (0), todo o time ganha Fora (0).
+            # Se não houver dados limpos de GPS para NINGUÉM naquele dia, assume Casa (1).
+            df['Jogou_em_Casa'] = df.groupby('Data')['Status_Local'].transform('min').fillna(1)
+            
         else:
-            df['Jogou_em_Casa'] = 1 
+            df['Jogou_em_Casa'] = 1
 
         # 5. Preencher Métricas Vazias e Calcular HIA
         df[config.COLS_METRICAS_PREENCHER_ZERO] = df[config.COLS_METRICAS_PREENCHER_ZERO].fillna(0)
