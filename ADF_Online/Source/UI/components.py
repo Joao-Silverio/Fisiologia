@@ -4,6 +4,17 @@ import Source.UI.visual as visual
 
 def renderizar_cabecalho(titulo, subtitulo):
     """Gera um cabeçalho padrão, com a logo do clube e linha de separação moderna."""
+
+    # INJEÇÃO CSS PARA SUBIR O CABEÇALHO (Reduz o espaço vazio no topo)
+    st.markdown("""
+        <style>
+            .block-container {
+                padding-top: 1.5rem !important; /* Força o limite superior */
+                padding-bottom: 1rem !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    
     c1, c2 = st.columns([1, 10])
     with c1:
         try:
@@ -47,7 +58,7 @@ def renderizar_card_kpi(titulo, valor, cor_borda=visual.CORES["primaria"], icone
     sombra_glow = f"0 4px 15px -3px {cor_borda}33"
 
     style_div = f"background: {fundo_gradiente}; border-radius: 12px; padding: 20px; box-shadow: {sombra_glow}; border-left: 6px solid {cor_borda}; margin-bottom: 15px; display: flex; flex-direction: column; justify-content: space-between; height: 100%; min-height: 130px;"
-    style_titulo = f"color: {visual.CORES['texto_claro']}; font-size: 13px; font-weight: 600; text-transform: uppercase;"
+    style_titulo = f"color: {visual.CORES['texto_claro']}; font-size: 13px; font-weight: 700; opacity: 0.9; text-transform: uppercase;"
     style_valor = f"color: {visual.CORES['texto_escuro']}; font-size: 32px; font-weight: 800; margin-top: 8px;"
 
     # HTML FINAL

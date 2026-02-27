@@ -209,17 +209,35 @@ def executar_ml_ao_vivo(
     
     delta_time_pct  = ((carga_hoje_time / carga_hist_time) - 1) * 100 if carga_hist_time > 0 else 0.0
     
+    # ==========================================
+    # CÁLCULO DOS DELTAS (VARIAÇÕES)
+    # ==========================================
+    # 1. Delta da Métrica Principal (Volume, HIA, V4, etc)
     curva_media_acum = df_historico.groupby(coluna_minuto)[coluna_acumulada].mean()
     media_acum_agora = curva_media_acum.loc[minuto_atual] if minuto_atual in curva_media_acum.index else carga_atual
     delta_alvo_pct = ((carga_atual / media_acum_agora) - 1) * 100 if media_acum_agora > 0 else 0.0
 
+    # 2. Delta do Player Load (A CORREÇÃO ESTÁ AQUI!)
+    if 'Player Load Acumulada' in df_atual.columns and 'Player Load Acumulada' in df_historico.columns:
+        pl_atual = df_atual[df_atual['Interval'] == minuto_atual]['Player Load Acumulada'].iloc[-1] if not df_atual.empty else 0
+        curva_media_pl = df_historico.groupby(coluna_minuto)['Player Load Acumulada'].mean()
+        media_pl_agora = curva_media_pl.loc[minuto_atual] if minuto_atual in curva_media_pl.index else pl_atual
+        
+        # Faz a comparação do Load de hoje vs Load histórico exato para este minuto
+        delta_pl_pct = ((pl_atual / media_pl_agora) - 1) * 100 if media_pl_agora > 0 else 0.0
+    else:
+        delta_pl_pct = 0.0
+
+    # 3. Atualiza o dicionário com os valores reais
     resultado.update({
         'minutos_futuros': minutos_futuros, 'acumulado_pred': acumulado_pred,
         'pred_superior': pred_superior, 'pred_inferior': pred_inferior,
         'carga_projetada': carga_projetada, 'minuto_final_proj': minuto_final_proj,
-        'delta_alvo_pct': delta_alvo_pct, 'delta_pl_pct': 0.0,
+        'delta_alvo_pct': delta_alvo_pct, 
+        'delta_pl_pct': delta_pl_pct, # <-- Agora envia o valor calculado!
         'delta_projetado_pct': (fator_proj - 1) * 100, 'delta_time_pct': delta_time_pct,
         'delta_atleta_vs_time': delta_alvo_pct - delta_time_pct, 'placar_atual': placar_atual,
         'modelo_usado': resultado['modelo_usado']
     })
+    
     return resultado

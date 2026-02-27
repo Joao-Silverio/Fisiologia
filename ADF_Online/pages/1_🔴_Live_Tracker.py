@@ -317,24 +317,43 @@ for periodo in [1, 2]:
             cor_grupo_load   = visual.CORES["aviso_carga"]   # Ex: Laranja (Para Carga Interna/Player Load)
             cor_grupo_pico   = visual.CORES["alerta_fadiga"] # Ex: Vermelho (Para o Pico de 5m - Risco de Lesão)
             
+            # 🌟 NOVA FUNÇÃO: Cria o número gigante já colorido com a seta!
+            def fmt_pct_colorido(x, tipo_cor="normal"):
+                if np.isnan(x): return "N/A"
+                is_neg = x < 0
+                
+                # A seta é sempre para cima se positivo, para baixo se negativo
+                seta = "▼" if is_neg else "▲"
+                
+                # A cor inverte dependendo se a métrica é de "Volume" (Normal) ou "Desgaste" (Inverse)
+                if tipo_cor == "normal":
+                    cor = visual.CORES["alerta_fadiga"] if is_neg else visual.CORES["ok_prontidao"]
+                else:
+                    cor = visual.CORES["ok_prontidao"] if is_neg else visual.CORES["alerta_fadiga"]
+                    
+                # Injeta a cor diretamente no texto gigante
+                return f"<span style='color: {cor};'>{seta} {abs(x):.1f}%</span>"
+            
             with k0:
                 ui.renderizar_card_kpi("Volume no Corte", fmt_dist(carga_atual), cor_borda=cor_grupo_volume, icone="⏳")
             
             with k1:
-                ui.renderizar_card_kpi("Histórico", fmt_pct(delta_alvo_pct), delta=fmt_pct(delta_alvo_pct), delta_color=cor_delta, cor_borda=cor_grupo_media, icone="🕰️")
-            
+                # 🎯 AQUI: Usamos a nova função colorida e enviamos delta=None para apagar a repetição de baixo
+                ui.renderizar_card_kpi("Histórico", fmt_pct_colorido(delta_alvo_pct, cor_delta), delta=None, cor_borda=cor_grupo_media, icone="🕰️")
+
             with k2:
                 ui.renderizar_card_kpi("Equipe", fmt_pct(delta_time_pct), delta=f"{fmt_pct(delta_atleta_vs_time)} Atleta", delta_color=cor_delta, cor_borda=cor_grupo_media, icone="👥")
-            
+
             with k3:
                 ui.renderizar_card_kpi(f"Proj. (min {minuto_final_proj})", fmt_dist(carga_projetada), cor_borda=cor_grupo_volume, icone="🚀")
             
             with k4:
-                ui.renderizar_card_kpi("Ritmo Proj.", fmt_pct(delta_projetado_pct), delta=fmt_pct(delta_projetado_pct), delta_color=cor_delta, cor_borda=cor_grupo_volume, icone="📈")
-            
+                # 🎯 AQUI TAMBÉM: Número gigante colorido e removemos a redundância
+                ui.renderizar_card_kpi("Ritmo Proj.", fmt_pct_colorido(delta_projetado_pct, cor_delta), delta=None, cor_borda=cor_grupo_volume, icone="📈")
+
             with k5:
                 ui.renderizar_card_kpi("Player Load", f"{pl_atual_acumulado:.0f}", delta=fmt_pct(delta_pl_pct), delta_color="inverse", cor_borda=cor_grupo_load, icone="🔋")
-
+            
             if 'df_recordes' in st.session_state:
                 rec = st.session_state['df_recordes']
                 
