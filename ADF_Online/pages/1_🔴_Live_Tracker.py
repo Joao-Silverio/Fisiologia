@@ -6,9 +6,9 @@ import plotly.express as px
 import os
 import warnings
 from streamlit_autorefresh import st_autorefresh
-from data_loader import obter_hora_modificacao, load_global_data
-from ml_engine import executar_ml_ao_vivo
-import config  
+from ADF_Online.Source.Dados.data_loader import obter_hora_modificacao, load_global_data
+from ADF_Online.Source.ML.ml_engine import executar_ml_ao_vivo
+import ADF_Online.Source.Dados.config as config  
 from PIL import Image
 
 # 1. Carrega a imagem com segurança

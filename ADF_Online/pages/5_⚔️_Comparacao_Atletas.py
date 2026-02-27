@@ -4,8 +4,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 from streamlit_autorefresh import st_autorefresh
-from data_loader import obter_hora_modificacao, load_global_data
-import config
+from ADF_Online.Source.Dados.data_loader import obter_hora_modificacao, load_global_data
+import ADF_Online.Source.Dados.config as config
 
 # ==========================================
 # 1. CONFIGURAÇÃO E ESTILO

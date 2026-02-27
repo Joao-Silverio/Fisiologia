@@ -1,10 +1,10 @@
 import streamlit as st
-import config
+import ADF_Online.Source.Dados.config as config
 from PIL import Image
 from streamlit_autorefresh import st_autorefresh
 
 # 1. Importar as funções do novo "Coração" do sistema
-from data_loader import obter_hora_modificacao, load_global_data
+from ADF_Online.Source.Dados.data_loader import obter_hora_modificacao, load_global_data
 
 # Configuração da página e logo
 logo = Image.open(config.CAMINHO_LOGO)

@@ -4,9 +4,9 @@ import numpy as np
 import plotly.graph_objs as go
 import plotly.express as px
 import warnings
-import config # <--- IMPORTANDO O CONFIG
+import ADF_Online.Source.Dados.config as config # <--- IMPORTANDO O CONFIG
 from streamlit_autorefresh import st_autorefresh
-from data_loader import obter_hora_modificacao, load_global_data
+from ADF_Online.Source.Dados.data_loader import obter_hora_modificacao, load_global_data
 
 st.set_page_config(page_title="Relatório HIA - Timeline", layout="wide")
 

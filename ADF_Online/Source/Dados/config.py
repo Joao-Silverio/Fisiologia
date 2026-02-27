@@ -3,15 +3,19 @@ import os
 # ==========================================
 # 1. CAMINHOS E DIRETÓRIOS
 # ==========================================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ARQUIVO_ORIGINAL = os.path.join(BASE_DIR, 'ADF OnLine 2024.xlsb')
-ARQUIVO_TEMP = 'ADF_TEMP_HOME.xlsb'
+# Pega o diretório atual do config.py (que agora é ADF_Online/src/data)
+DIR_ATUAL = os.path.dirname(os.path.abspath(__file__))
+
+BASE_DIR = os.path.dirname(os.path.abspath(DIR_ATUAL))
+
+ARQUIVO_ORIGINAL = os.path.join(BASE_DIR, 'Data_Files', 'ADF OnLine 2024.xlsb')
+ARQUIVO_TEMP = ARQUIVO_TEMP = os.path.join(BASE_DIR, 'Data_Files', 'ADF_TEMP_HOME.xlsb')
 
 # Adicionando o caminho oficial da pasta de modelos
 DIRETORIO_MODELOS = os.path.join(BASE_DIR, 'Models')
 
 # Adiciona Logo:
-CAMINHO_LOGO = os.path.join(BASE_DIR, 'BarraFC.png')
+CAMINHO_LOGO = os.path.join(BASE_DIR, 'Assets', 'BarraFC.png')
 
 # =================================================================
 # CONFIGURAÇÕES DE GEOLOCALIZAÇÃO (FATOR CASA)

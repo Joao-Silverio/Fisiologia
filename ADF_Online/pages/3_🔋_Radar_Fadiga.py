@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import config # <--- IMPORTANDO O CONFIG AQUI
+import ADF_Online.Source.Dados.config as config # <--- IMPORTANDO O CONFIG AQUI
 from streamlit_autorefresh import st_autorefresh
-from data_loader import obter_hora_modificacao, load_global_data
+from ADF_Online.Source.Dados.data_loader import obter_hora_modificacao, load_global_data
 
 # 1. CONFIGURAÇÃO E ESTILO
 st.set_page_config(page_title="Radar de Fadiga", layout="wide")
