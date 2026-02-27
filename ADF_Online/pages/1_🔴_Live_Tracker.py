@@ -20,14 +20,12 @@ st.set_page_config(page_title=f"Live Tracker | {visual.CLUBE['sigla']}", layout=
 ui.renderizar_cabecalho("Live Tracker", "Projeção de Carga Física e Machine Learning")
 
 # 1. Pede à página para "piscar os olhos" a cada 2 segundos (2000 ms)
-# Usa uma "key" diferente para cada página (ex: "refresh_comparacao", "refresh_hia")
 st_autorefresh(interval=2000, limit=None, key="refresh_desta_pagina")
 
 # 2. Verifica a "impressão digital" (hora exata) do ficheiro Excel
 hora_atual = obter_hora_modificacao(config.ARQUIVO_ORIGINAL)
 
-# 3. Pede os dados. Se a "hora_atual" não mudou, o Streamlit não faz NADA (0% de CPU).
-# Se a "hora_atual" mudou, o Streamlit carrega os dados novos!
+# 3. Pede os dados.
 df_novo, df_recordes_novo = load_global_data(hora_atual)
 
 # 4. Atualiza a memória global para os gráficos desenharem com os dados frescos
@@ -35,7 +33,6 @@ if not df_novo.empty:
     st.session_state['df_global'] = df_novo
     st.session_state['df_recordes'] = df_recordes_novo
 
-# E depois continuas a ler o session_state como sempre fizeste:
 if 'df_global' not in st.session_state:
     st.warning("⚠️ Carregue os dados na página principal (Home) primeiro.")
     st.stop()
@@ -53,91 +50,61 @@ coluna_jogo = 'Data'
 coluna_minuto = 'Interval'
 
 # =====================================================================
-# 3. FILTROS NA TELA PRINCIPAL
+# 3. FILTROS NA TELA PRINCIPAL (FUNIL: COMPETIÇÃO -> JOGO -> ATLETA)
 # =====================================================================
 st.markdown("### 🔍 Filtros de Análise")
 
 with st.container():
+    
+    # --- LINHA 1: COMPETIÇÃO, JOGO E MÉTRICA ---
+    col1, col2, col3 = st.columns([1.5, 2.5, 1.5])
+    
     lista_campeonatos = sorted(df_completo['Competição'].dropna().unique().tolist())
-    
-    campeonatos_selecionados = st.multiselect(
-        "🏆 Campeonatos (Deixe vazio para incluir TODOS):", 
-        options=lista_campeonatos,
-        default=[]
-    )
-    
-    if not campeonatos_selecionados: 
-        df_base = df_completo.copy()
-    else:
-        df_base = df_completo[df_completo['Competição'].isin(campeonatos_selecionados)].copy()
-
-    col1, col2, col3, col4 = st.columns([1.5, 1.5, 1.5, 1.5])
-    
     with col1:
-        modo_filtro = st.radio("Prioridade:", ("Focar no Atleta", "Focar no Jogo"), horizontal=True)
+        campeonatos_selecionados = st.multiselect("🏆 Campeonatos:", options=lista_campeonatos, default=[])
         
+    df_base = df_completo[df_completo['Competição'].isin(campeonatos_selecionados)] if campeonatos_selecionados else df_completo.copy()
+    lista_jogos_display = df_base.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)['Data_Display'].tolist()
+    
+    with col2: 
+        jogo_selecionado_display = st.selectbox("📅 Selecione o Jogo:", lista_jogos_display)
+        
+    if not jogo_selecionado_display: 
+        st.warning("Nenhum dado encontrado.")
+        st.stop()
+        
+    jogo_selecionado = df_base[df_base['Data_Display'] == jogo_selecionado_display]['Data'].iloc[0]
+    df_jogo_filtrado = df_base[df_base['Data'] == jogo_selecionado].copy()
+
     with col3:
         opcoes_metricas = list(config.METRICAS_CONFIG.keys())
-        metrica_selecionada = st.pills("Métrica:", opcoes_metricas, default="V4 Dist")
-        if not metrica_selecionada:
-            metrica_selecionada = "V4 Dist"
-            
+        # Usa um selectbox normal aqui para a métrica não brigar visualmente com o pills dos atletas
+        metrica_selecionada = st.selectbox("⚙️ Selecione a Métrica:", opcoes_metricas)
 
-    # ================= LÓGICA DE FILTRAGEM =================
-    jogo_selecionado_display = None
-    atleta_selecionado = None
+    # --- LINHA 2: ESCOLHA DO ATLETA (PILLS) ---
+    st.markdown("<br>", unsafe_allow_html=True)
+    lista_atletas = sorted(df_jogo_filtrado['Name'].dropna().unique())
+    
+    atleta_selecionado = st.pills("🏃 Selecione o Atleta:", lista_atletas, default=lista_atletas[0] if lista_atletas else None)
 
-    if modo_filtro == "Focar no Atleta":
-        lista_atletas = df_base['Name'].dropna().unique()
-        atletas_ordenados = sorted(lista_atletas)
-        
-        atleta_selecionado = st.pills("Selecione o Atleta:", atletas_ordenados, default=atletas_ordenados[0] if len(atletas_ordenados)>0 else None)
-        if not atleta_selecionado and len(atletas_ordenados) > 0:
-            atleta_selecionado = atletas_ordenados[0]
-        
-        df_filtrado = df_base[df_base['Name'] == atleta_selecionado]
-        jogos_unicos = df_filtrado.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)
-        lista_jogos_display = jogos_unicos['Data_Display'].tolist()
-        
-        with col2:
-            if lista_jogos_display:
-                jogo_selecionado_display = st.selectbox("Selecione o Jogo:", lista_jogos_display)
-        
-    else:
-        jogos_unicos = df_base.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)
-        lista_jogos_display = jogos_unicos['Data_Display'].tolist()
-        
-        with col2:
-            if lista_jogos_display:
-                jogo_selecionado_display = st.selectbox("Selecione o Jogo:", lista_jogos_display)
-        
-        if jogo_selecionado_display:
-            df_filtrado = df_base[df_base['Data_Display'] == jogo_selecionado_display]
-            lista_atletas = df_filtrado['Name'].dropna().unique()
-            atletas_ordenados = sorted(lista_atletas)
-            
-            atleta_selecionado = st.pills("Selecione o Atleta:", atletas_ordenados, default=atletas_ordenados[0] if len(atletas_ordenados)>0 else None)
-            if not atleta_selecionado and len(atletas_ordenados) > 0:
-                atleta_selecionado = atletas_ordenados[0]
-
-    if jogo_selecionado_display:
-        jogo_selecionado = df_base[df_base['Data_Display'] == jogo_selecionado_display]['Data'].iloc[0]
-    else:
-        st.warning("Nenhum dado encontrado para o(s) campeonato(s) selecionado(s).")
+    if not atleta_selecionado:
+        st.warning("Por favor, selecione um atleta para continuar.")
         st.stop()
     
+    # Prepara as variáveis da métrica escolhida
     cfg = config.METRICAS_CONFIG[metrica_selecionada]
     coluna_distancia = cfg["coluna_distancia"]
     coluna_acumulada = cfg["coluna_acumulada"]
     titulo_grafico = f"{cfg['titulo_grafico']} - {atleta_selecionado}"
     unidade = cfg["unidade"]
     
+    # O df_atleta vai ter todos os jogos desse atleta (para construir o background cinza do gráfico)
     df_atleta = df_base[df_base['Name'] == atleta_selecionado].copy()
 
 # =====================================================================
 # 4. MOTOR DE GERAÇÃO DOS GRÁFICOS E ML (1º e 2º TEMPO EM ABAS)
 # =====================================================================
-
+st.markdown("---")
 aba_t1, aba_t2 = st.tabs(["⏱️ 1º Tempo", "⏱️ 2º Tempo"])
 mapa_abas = {1: aba_t1, 2: aba_t2}
 
@@ -193,32 +160,21 @@ for periodo in [1, 2]:
 
             with col_s1:
                 minuto_corte = st.slider(
-                    f"⏱️ Início da Previsão (Corte):",
-                    min_value=1,
-                    max_value=minuto_atual_max,
-                    value=st.session_state[key_corte], 
-                    step=1,
-                    help="Define o momento onde os dados reais (verde) param e a IA (laranja) começa a agir.",
-                    key=key_corte
+                    f"⏱️ Início da Previsão (Corte):", min_value=1, max_value=minuto_atual_max,
+                    value=st.session_state[key_corte], step=1,
+                    help="Define o momento onde os dados reais param e a IA começa a agir.", key=key_corte
                 )
                 
             with col_s2:
                 val_proj_atual = st.session_state[key_proj]
-                if val_proj_atual < minuto_corte:
-                    val_proj_atual = minuto_corte
+                if val_proj_atual < minuto_corte: val_proj_atual = minuto_corte
 
                 minuto_projecao_ate = st.slider(
-                    f"🚀 Fim da Previsão (Projetar até):",
-                    min_value=1, 
-                    max_value=teto_maximo,
-                    value=val_proj_atual,
-                    step=1,
-                    help="Até que minuto do jogo a linha tracejada deve ir?",
-                    key=key_proj 
+                    f"🚀 Fim da Previsão (Projetar até):", min_value=1, max_value=teto_maximo,
+                    value=val_proj_atual, step=1, help="Até que minuto do jogo a linha tracejada deve ir?", key=key_proj 
                 ) 
                 
-            if minuto_projecao_ate < minuto_corte:
-                minuto_projecao_ate = minuto_corte
+            if minuto_projecao_ate < minuto_corte: minuto_projecao_ate = minuto_corte
             
             df_historico = df[df[coluna_jogo] != jogo_atual_nome].copy()
             df_atual = df[df[coluna_jogo] == jogo_atual_nome].sort_values(coluna_minuto)
@@ -301,96 +257,56 @@ for periodo in [1, 2]:
             # RENDERIZAÇÃO NA TELA (COM HELP / TOOLTIPS)
             # =====================================================================
             def fmt_dist(x):
-                if metrica_selecionada in ["Total Distance", "V4 Dist", "V5 Dist"]:
-                    return f"{x:.2f}{unidade}" if not np.isnan(x) else "N/A"
-                else:
-                    return f"{x:.0f}{unidade}" if not np.isnan(x) else "N/A"
+                if metrica_selecionada in ["Total Distance", "V4 Dist", "V5 Dist"]: return f"{x:.2f}{unidade}" if not np.isnan(x) else "N/A"
+                else: return f"{x:.0f}{unidade}" if not np.isnan(x) else "N/A"
                     
             def fmt_pct(x): return f"{x:+.1f}%" if not np.isnan(x) else "N/A"
 
             k0, k1, k2, k3, k4, k5, k6 = st.columns(7)
             cor_delta = "normal" if metrica_selecionada in ["V4 Dist", "HIA", "Total Distance"] else "inverse"
             
-            # DEFINIR OS GRUPOS DE CORES ---
-            cor_grupo_volume = visual.CORES["primaria"]      # Ex: Azul Principal (Para os dados de Volume/Projeção)
-            cor_grupo_media  = visual.CORES["secundaria"]    # Ex: Azul Claro/Secundário (Para os dados de Contexto/Médias)
-            cor_grupo_load   = visual.CORES["aviso_carga"]   # Ex: Laranja (Para Carga Interna/Player Load)
-            cor_grupo_pico   = visual.CORES["alerta_fadiga"] # Ex: Vermelho (Para o Pico de 5m - Risco de Lesão)
+            cor_grupo_volume = visual.CORES["primaria"]      
+            cor_grupo_media  = visual.CORES["secundaria"]    
+            cor_grupo_load   = visual.CORES["aviso_carga"]   
+            cor_grupo_pico   = visual.CORES["alerta_fadiga"] 
             
-            # 🌟 NOVA FUNÇÃO: Cria o número gigante já colorido com a seta!
             def fmt_pct_colorido(x, tipo_cor="normal"):
                 if np.isnan(x): return "N/A"
                 is_neg = x < 0
-                
-                # A seta é sempre para cima se positivo, para baixo se negativo
                 seta = "▼" if is_neg else "▲"
-                
-                # A cor inverte dependendo se a métrica é de "Volume" (Normal) ou "Desgaste" (Inverse)
-                if tipo_cor == "normal":
-                    cor = visual.CORES["alerta_fadiga"] if is_neg else visual.CORES["ok_prontidao"]
-                else:
-                    cor = visual.CORES["ok_prontidao"] if is_neg else visual.CORES["alerta_fadiga"]
-                    
-                # Injeta a cor diretamente no texto gigante
+                if tipo_cor == "normal": cor = visual.CORES["alerta_fadiga"] if is_neg else visual.CORES["ok_prontidao"]
+                else: cor = visual.CORES["ok_prontidao"] if is_neg else visual.CORES["alerta_fadiga"]
                 return f"<span style='color: {cor};'>{seta} {abs(x):.1f}%</span>"
             
-            with k0:
-                ui.renderizar_card_kpi("Volume no Corte", fmt_dist(carga_atual), cor_borda=cor_grupo_volume, icone="⏳")
-            
-            with k1:
-                # 🎯 AQUI: Usamos a nova função colorida e enviamos delta=None para apagar a repetição de baixo
-                ui.renderizar_card_kpi("Histórico", fmt_pct_colorido(delta_alvo_pct, cor_delta), delta=None, cor_borda=cor_grupo_media, icone="🕰️")
-
-            with k2:
-                ui.renderizar_card_kpi("Equipe", fmt_pct(delta_time_pct), delta=f"{fmt_pct(delta_atleta_vs_time)} Atleta", delta_color=cor_delta, cor_borda=cor_grupo_media, icone="👥")
-
-            with k3:
-                ui.renderizar_card_kpi(f"Proj. (min {minuto_final_proj})", fmt_dist(carga_projetada), cor_borda=cor_grupo_volume, icone="🚀")
-            
-            with k4:
-                # 🎯 AQUI TAMBÉM: Número gigante colorido e removemos a redundância
-                ui.renderizar_card_kpi("Ritmo Proj.", fmt_pct_colorido(delta_projetado_pct, cor_delta), delta=None, cor_borda=cor_grupo_volume, icone="📈")
-
-            with k5:
-                ui.renderizar_card_kpi("Player Load", f"{pl_atual_acumulado:.0f}", delta=fmt_pct(delta_pl_pct), delta_color="inverse", cor_borda=cor_grupo_load, icone="🔋")
+            with k0: ui.renderizar_card_kpi("Volume no Corte", fmt_dist(carga_atual), cor_borda=cor_grupo_volume, icone="⏳")
+            with k1: ui.renderizar_card_kpi("Histórico", fmt_pct_colorido(delta_alvo_pct, cor_delta), delta=None, cor_borda=cor_grupo_media, icone="🕰️")
+            with k2: ui.renderizar_card_kpi("Equipe", fmt_pct(delta_time_pct), delta=f"{fmt_pct(delta_atleta_vs_time)} Atleta", delta_color=cor_delta, cor_borda=cor_grupo_media, icone="👥")
+            with k3: ui.renderizar_card_kpi(f"Proj. (min {minuto_final_proj})", fmt_dist(carga_projetada), cor_borda=cor_grupo_volume, icone="🚀")
+            with k4: ui.renderizar_card_kpi("Ritmo Proj.", fmt_pct_colorido(delta_projetado_pct, cor_delta), delta=None, cor_borda=cor_grupo_volume, icone="📈")
+            with k5: ui.renderizar_card_kpi("Player Load", f"{pl_atual_acumulado:.0f}", delta=fmt_pct(delta_pl_pct), delta_color="inverse", cor_borda=cor_grupo_load, icone="🔋")
             
             if 'df_recordes' in st.session_state:
                 rec = st.session_state['df_recordes']
-                
-                # TRADUTOR: Garante que a coluna que estamos a procurar é exatamente a mesma que o Home.py gerou
                 mapa_nomes_internos = {
-                    'Total Distance': 'Dist_Total',
-                    'Player Load': 'Load_Total',
-                    'V4 Dist': 'V4_Dist',
-                    'V5 Dist': 'V5_Dist',
-                    'V4 To8 Eff': 'V4_Eff',
-                    'V5 To8 Eff': 'V5_Eff',
-                    'HIA': 'HIA_Total'
+                    'Total Distance': 'Dist_Total', 'Player Load': 'Load_Total', 'V4 Dist': 'V4_Dist', 'V5 Dist': 'V5_Dist',
+                    'V4 To8 Eff': 'V4_Eff', 'V5 To8 Eff': 'V5_Eff', 'HIA': 'HIA_Total'
                 }
-                
-                # Acha o sufixo correto baseado na coluna real do Catapult (ex: 'Total Distance' vira 'Dist_Total')
                 sufixo_recorde = mapa_nomes_internos.get(coluna_distancia, metrica_selecionada.replace(' ', '_'))
                 nome_coluna_recorde = f"Recorde_5min_{sufixo_recorde}"
                 
-                # Verifica se a coluna existe na memória
                 if nome_coluna_recorde in rec.columns:
                     recorde_atleta = rec[rec['Name'] == atleta_selecionado][nome_coluna_recorde].values
                     val_recorde = recorde_atleta[0] if len(recorde_atleta) > 0 else 0
                 else:
                     val_recorde = 0
                 
-                # ESFORÇO ATUAL (Soma real dos últimos 5 minutos no corte)
                 esforço_atual_5m = df_atual_corte[coluna_distancia].tail(5).sum() if not df_atual_corte.empty else 0
-                
                 percentual_do_limite = (esforço_atual_5m / val_recorde * 100) if val_recorde > 0 else 0
             
-                with k6:
-                    ui.renderizar_card_kpi("Pico (5m)", f"{percentual_do_limite:.1f}%", delta=f"Rec: {val_recorde:.0f}{unidade}", delta_color="off", cor_borda=cor_grupo_pico, icone="🔥")
+                with k6: ui.renderizar_card_kpi("Pico (5m)", f"{percentual_do_limite:.1f}%", delta=f"Rec: {val_recorde:.0f}{unidade}", delta_color="off", cor_borda=cor_grupo_pico, icone="🔥")
 
-            if metrica_selecionada in ["Total Distance", "V4 Dist", "V5 Dist"]:
-                hover_formato = "%{y:.2f}" + unidade
-            else:
-                hover_formato = "%{y:.0f}" + unidade
+            if metrica_selecionada in ["Total Distance", "V4 Dist", "V5 Dist"]: hover_formato = "%{y:.2f}" + unidade
+            else: hover_formato = "%{y:.0f}" + unidade
             
             fig = go.Figure()
             
@@ -408,7 +324,7 @@ for periodo in [1, 2]:
                         hovertemplate=f'<b>{jogo_display}</b><br>Valor: {hover_formato}<extra></extra>'
                     ))
 
-            # PLOTA A LINHA VERDE COMPLETA (O QUE ELE REALMENTE FEZ NO JOGO TODO)
+            # PLOTA A LINHA VERDE COMPLETA
             jogo_display = df_completo[df_completo['Data'] == jogo_atual_nome]['Data_Display'].iloc[0] if jogo_atual_nome in df_completo['Data'].values else str(jogo_atual_nome)
             fig.add_trace(go.Scatter(
                 x=df_atual[coluna_minuto], y=df_atual[coluna_acumulada], mode='lines',
@@ -428,9 +344,7 @@ for periodo in [1, 2]:
                     line=dict(color='#FF8C00', width=3, dash='dash'), hovertemplate=f'Projeção: {hover_formato}<extra></extra>'
                 ))
                 
-                # Linha vertical vermelha indicando onde a IA fez a projeção
                 fig.add_vline(x=minuto_atual, line_dash="dash", line_color="#E53935")
-                #fig.add_annotation(x=minuto_atual, y=carga_atual, text=" Ponto de Corte", showarrow=False, yref="y", xanchor="left", yanchor="bottom", font=dict(color="#E53935"))
 
             x_min = 0
             x_max = minuto_projecao_ate + 2  
@@ -438,6 +352,7 @@ for periodo in [1, 2]:
             fig.update_xaxes(tickmode='linear', dtick=1, range=[x_min, x_max], tickfont=dict(size=10), tickangle=0)
 
             fig.update_layout(
+                template='plotly_dark', plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                 title=titulo_grafico + f" - {periodo}º Tempo",
                 xaxis_title=f'Minutos de Jogo ({periodo}º Tempo)',
                 yaxis_title=metrica_selecionada,
@@ -445,7 +360,7 @@ for periodo in [1, 2]:
                 height=650, hovermode='x unified', margin=dict(l=20, r=20, t=50, b=200)
             )
 
-            st.plotly_chart(fig, width='stretch', key=f"grafico_{periodo}")
+            st.plotly_chart(fig, use_container_width=True, key=f"grafico_{periodo}")
                 
         else:
             st.info(f"Nenhum dado encontrado para o {periodo}º Tempo deste atleta.")
