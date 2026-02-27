@@ -16,7 +16,7 @@ def renderizar_cabecalho(titulo, subtitulo):
     c1, c2 = st.columns([1, 10])
     with c1:
         try:
-            st.image(Image.open(visual.CLUBE["logo_path"]), use_container_width=True)
+            st.image(Image.open(visual.CLUBE["logo_path"]), width='content')
         except:
             st.error("Logo")
     with c2:
