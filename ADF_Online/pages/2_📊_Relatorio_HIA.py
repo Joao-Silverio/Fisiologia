@@ -149,17 +149,27 @@ for periodo in periodos_para_analise:
         # =====================================================================
         # RENDERIZAÇÃO DOS BOTÕES (REORDENADOS E FORMATADOS)
         # =====================================================================
+        # =====================================================================
+        # RENDERIZAÇÃO DOS BOTÕES (AGORA COM CARTÕES CUSTOMIZADOS)
+        # =====================================================================
         k1, k2, k3, k4, k5 = st.columns(5)
         
-        with k1: ui.renderizar_card_kpi("Minutos Jogados", f"{minuto_maximo}m", icone="⏱️")
-        with k2: ui.renderizar_card_kpi("HIA Total", f"{total_hia_periodo:.2f}", cor_borda=visual.CORES["alerta_fadiga"], icone="⚡")
-        
-        # Este deixamos padrão por causa da setinha de "delta"
-        k3.metric("Média da Equipe (HIA)", f"{media_hia_equipe:.2f} ações", delta=f"{delta_vs_equipe:+.2f}% vs Equipe")
-        
-        with k4: ui.renderizar_card_kpi("Densidade (HIA/min)", f"{densidade:.2f}", icone="📊")
-        with k5: ui.renderizar_card_kpi("Tempo sem Estímulo", f"{maior_gap_descanso}m", cor_borda=visual.CORES["ok_prontidao"], icone="🔋")
-
+        with k1: 
+            ui.renderizar_card_kpi("Minutos Jogados", f"{minuto_maximo}m", icone="⏱️")
+            
+        with k2: 
+            ui.renderizar_card_kpi("HIA Total", f"{total_hia_periodo:.2f}", cor_borda=visual.CORES["alerta_fadiga"], icone="⚡")
+            
+        with k3: 
+            # O parâmetro delta vai fazer a mágica da setinha de variação aqui!
+            ui.renderizar_card_kpi("Média da Equipe", f"{media_hia_equipe:.2f}", delta=f"{delta_vs_equipe:+.2f}% vs Equipe", delta_color="normal", icone="👥")
+            
+        with k4: 
+            ui.renderizar_card_kpi("Densidade", f"{densidade:.2f}", icone="📊")
+            
+        with k5: 
+            ui.renderizar_card_kpi("Tempo s/ Estímulo", f"{maior_gap_descanso}m", delta="Recuperação", delta_color="off", cor_borda=visual.CORES["ok_prontidao"], icone="🔋")
+            
         # =====================================================================
         # GRÁFICO EMPILHADO (Ajustado para 2 casas decimais no hover)
         # =====================================================================

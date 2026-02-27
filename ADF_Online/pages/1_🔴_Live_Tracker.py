@@ -311,43 +311,29 @@ for periodo in [1, 2]:
             k0, k1, k2, k3, k4, k5, k6 = st.columns(7)
             cor_delta = "normal" if metrica_selecionada in ["V4 Dist", "HIA", "Total Distance"] else "inverse"
             
+            # DEFINIR OS GRUPOS DE CORES ---
+            cor_grupo_volume = visual.CORES["primaria"]      # Ex: Azul Principal (Para os dados de Volume/Projeção)
+            cor_grupo_media  = visual.CORES["secundaria"]    # Ex: Azul Claro/Secundário (Para os dados de Contexto/Médias)
+            cor_grupo_load   = visual.CORES["aviso_carga"]   # Ex: Laranja (Para Carga Interna/Player Load)
+            cor_grupo_pico   = visual.CORES["alerta_fadiga"] # Ex: Vermelho (Para o Pico de 5m - Risco de Lesão)
+            
             with k0:
-                ui.renderizar_card_kpi("Volume no Corte", fmt_dist(carga_atual), icone="⏳")
+                ui.renderizar_card_kpi("Volume no Corte", fmt_dist(carga_atual), cor_borda=cor_grupo_volume, icone="⏳")
             
-            k1.metric(
-                label="Ritmo até o Corte vs Histórico", 
-                value=fmt_pct(delta_alvo_pct), 
-                delta=fmt_pct(delta_alvo_pct), 
-                delta_color=cor_delta,
-                help="Compara o esforço de hoje com a média histórica do atleta exatamente neste mesmo minuto. Valores positivos indicam que ele está a correr acima da sua média normal."
-            )
+            with k1:
+                ui.renderizar_card_kpi("Histórico", fmt_pct(delta_alvo_pct), delta=fmt_pct(delta_alvo_pct), delta_color=cor_delta, cor_borda=cor_grupo_media, icone="🕰️")
             
-            k2.metric(
-                label="Ritmo até o Corte vs Equipe", 
-                value=fmt_pct(delta_time_pct), 
-                delta=f"{fmt_pct(delta_atleta_vs_time)} (Atleta vs Time)", 
-                delta_color=cor_delta,
-                help="O valor principal compara a média da equipe hoje com a média histórica da equipe. O número em baixo (Atleta vs Time) mostra se este jogador está a fazer um esforço maior ou menor que o resto da equipe."
-            )
+            with k2:
+                ui.renderizar_card_kpi("Equipe", fmt_pct(delta_time_pct), delta=f"{fmt_pct(delta_atleta_vs_time)} Atleta", delta_color=cor_delta, cor_borda=cor_grupo_media, icone="👥")
             
             with k3:
-                ui.renderizar_card_kpi(f"Projeção (min {minuto_final_proj})", fmt_dist(carga_projetada), cor_borda="#F59E0B", icone="🚀")
+                ui.renderizar_card_kpi(f"Proj. (min {minuto_final_proj})", fmt_dist(carga_projetada), cor_borda=cor_grupo_volume, icone="🚀")
             
-            k4.metric(
-                label="Ritmo Projetado", 
-                value=fmt_pct(delta_projetado_pct), 
-                delta=fmt_pct(delta_projetado_pct), 
-                delta_color=cor_delta,
-                help="Indica se a distância final projetada pela IA vai terminar acima ou abaixo da média histórica do atleta no minuto projetado."
-            )
+            with k4:
+                ui.renderizar_card_kpi("Ritmo Proj.", fmt_pct(delta_projetado_pct), delta=fmt_pct(delta_projetado_pct), delta_color=cor_delta, cor_borda=cor_grupo_volume, icone="📈")
             
-            k5.metric(
-                label="Player Load no Corte", 
-                value=f"{pl_atual_acumulado:.0f}", 
-                delta=fmt_pct(delta_pl_pct), 
-                delta_color="inverse",
-                help="A Carga Mecânica (Player Load) gerada pelos acelerometros até ao minuto de corte. O valor percentual mostra se a carga hoje está acima da sua média histórica para o mesmo minuto."
-            )
+            with k5:
+                ui.renderizar_card_kpi("Player Load", f"{pl_atual_acumulado:.0f}", delta=fmt_pct(delta_pl_pct), delta_color="inverse", cor_borda=cor_grupo_load, icone="🔋")
 
             if 'df_recordes' in st.session_state:
                 rec = st.session_state['df_recordes']
@@ -379,12 +365,8 @@ for periodo in [1, 2]:
                 
                 percentual_do_limite = (esforço_atual_5m / val_recorde * 100) if val_recorde > 0 else 0
             
-                k6.metric(
-                    label="Pico de Fadiga (Últimos 5m)",
-                    value=f"{percentual_do_limite:.1f}%",
-                    delta=f"Recorde: {val_recorde:.0f}{unidade}",
-                    help=f"Soma o esforço nos 5 minutos antes do corte e compara com o recorde absoluto do atleta na temporada."
-                )
+                with k6:
+                    ui.renderizar_card_kpi("Pico (5m)", f"{percentual_do_limite:.1f}%", delta=f"Rec: {val_recorde:.0f}{unidade}", delta_color="off", cor_borda=cor_grupo_pico, icone="🔥")
 
             if metrica_selecionada in ["Total Distance", "V4 Dist", "V5 Dist"]:
                 hover_formato = "%{y:.2f}" + unidade

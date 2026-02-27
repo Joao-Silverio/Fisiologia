@@ -13,13 +13,13 @@ CLUBE = {
 
 # 2. PALETA DE CORES (DARK MODE MODERNO)
 CORES = {
-    "primaria": "#3B82F6",      # Azul vibrante (Botões e destaques principais)
+    "primaria": "#FDFD96",      # Azul vibrante (Botões e destaques principais)
     "secundaria": "#60A5FA",    # Azul claro
     "fundo_card": "#1E293B",    # Fundo dos cartões (Cinza/Azul muito escuro)
     "texto_escuro": "#F8FAFC",  # Branco/Gelo (No dark mode, o "texto_escuro" principal vira claro para dar contraste)
     "texto_claro": "#94A3B8",   # Cinza chumbo (Subtítulos)
     "alerta_fadiga": "#EF4444", # Vermelho
-    "aviso_carga": "#F59E0B",   # Laranja
+    "aviso_carga": "#D97706",   # Laranja
     "ok_prontidao": "#10B981"   # Verde
 }
 
