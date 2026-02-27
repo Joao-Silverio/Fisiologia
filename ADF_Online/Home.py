@@ -1,53 +1,41 @@
 import streamlit as st
-import ADF_Online.Source.Dados.config as config
-from PIL import Image
 from streamlit_autorefresh import st_autorefresh
 
-# 1. Importar as funções do novo "Coração" do sistema
-from ADF_Online.Source.Dados.data_loader import obter_hora_modificacao, load_global_data
+# 1. Importações da sua nova Arquitetura
+import Source.Dados.config as config
+from Source.Dados.data_loader import obter_hora_modificacao, load_global_data
+import Source.UI.visual as visual
+import Source.UI.components as ui
 
-# Configuração da página e logo
-logo = Image.open(config.CAMINHO_LOGO)
-st.set_page_config(page_title="Sports Performance Hub", layout="wide", page_icon=logo)
+# 2. Configuração de Página usando o Visual central
+st.set_page_config(page_title=f"Sports Hub | {visual.CLUBE['sigla']}", layout="wide")
 
-st.markdown("""
-    <style>
-        .block-container { padding-top: 1rem; padding-bottom: 1rem; }
-    </style>
-    """, unsafe_allow_html=True)
+# 3. SUBSTITUI os títulos antigos por UMA única linha do seu componente!
+ui.renderizar_cabecalho("Sports Performance Hub", "Painel central de análise fisiológica e tática")
 
-col_logo, col_titulo = st.columns([1, 15]) 
-with col_logo:
-    st.image(logo, width=100) 
-with col_titulo:
-    st.title("Sports Performance Hub")
-
-st.markdown("Bem-vindo ao painel central de análise fisiológica e tática.")
-
-# 2. A "Magia" do Tempo Real (A página pisca a cada 2 segundos para ver se há atualizações)
+# 4. A Lógica dos dados (mantém exatamente igual)
 st_autorefresh(interval=2000, limit=None, key="home_tracker_refresh")
-
-# 3. Lê a impressão digital do ficheiro
 hora_atualizacao = obter_hora_modificacao(config.ARQUIVO_ORIGINAL)
 
-# 4. O teu código original, mas agora muito mais rápido e limpo!
 try:
     df, df_recordes = load_global_data(hora_atualizacao)
     
-    if df is not None and df_recordes is not None and not df.empty:
-        # Guarda na memória para o resto do sistema poder usar instantaneamente
+    if df is not None and not df.empty:
         st.session_state['df_global'] = df
         st.session_state['df_recordes'] = df_recordes
         
-        st.success("✅ Base de dados global e Recordes Fisiológicos carregados com sucesso em Tempo Real!")
+        st.success("✅ Base de dados carregada!")
         
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total de Atletas Registrados", df['Name'].nunique() if 'Name' in df.columns else 0)
-        col2.metric("Total de Jogos Analisados", df['Data'].nunique() if 'Data' in df.columns else 0)
-        col3.metric("Linhas de GPS Lidas", len(df))
-        st.info("👈 Selecione um dos módulos no menu lateral para começar a análise.")
+        # 5. SUBSTITUI os `st.metric` antigos pelos seus novos cartões Dark Mode!
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            ui.renderizar_card_kpi("Total de Atletas", str(df['Name'].nunique()), icone="👥")
+        with c2:
+            ui.renderizar_card_kpi("Jogos Analisados", str(df['Data'].nunique()), icone="📅")
+        with c3:
+            ui.renderizar_card_kpi("Linhas de GPS", str(len(df)), cor_borda=visual.CORES["ok_prontidao"], icone="📡")
+            
     else:
-        st.warning("⚠️ O ficheiro Excel está vazio ou não pôde ser lido.")
-        
+        st.warning("⚠️ Ficheiro Excel vazio.")
 except Exception as e:
-    st.error(f"Erro ao processar os dados: {e}")
+    st.error(f"Erro: {e}")

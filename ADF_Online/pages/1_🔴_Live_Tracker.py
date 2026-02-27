@@ -6,16 +6,18 @@ import plotly.express as px
 import os
 import warnings
 from streamlit_autorefresh import st_autorefresh
-from ADF_Online.Source.Dados.data_loader import obter_hora_modificacao, load_global_data
-from ADF_Online.Source.ML.ml_engine import executar_ml_ao_vivo
-import ADF_Online.Source.Dados.config as config  
-from PIL import Image
+
+from Source.Dados.data_loader import obter_hora_modificacao, load_global_data
+from Source.ML.ml_engine import executar_ml_ao_vivo
+import Source.Dados.config as config
+import Source.UI.visual as visual
+import Source.UI.components as ui
 
 # 1. Carrega a imagem com segurança
-logo = Image.open(config.CAMINHO_LOGO)
+st.set_page_config(page_title=f"Live Tracker | {visual.CLUBE['sigla']}", layout="wide")
 
-# 2. Usa a variável 'logo'
-st.set_page_config(page_title="Live Tracker Físico", layout="wide", page_icon=logo)
+# Cabeçalho Padronizado UI 
+ui.renderizar_cabecalho("Live Tracker", "Projeção de Carga Física e Machine Learning")
 
 # 1. Pede à página para "piscar os olhos" a cada 2 segundos (2000 ms)
 # Usa uma "key" diferente para cada página (ex: "refresh_comparacao", "refresh_hia")
@@ -34,33 +36,16 @@ if not df_novo.empty:
     st.session_state['df_recordes'] = df_recordes_novo
 
 # E depois continuas a ler o session_state como sempre fizeste:
-if 'df_global' not in st.session_state or st.session_state['df_global'].empty:
-    st.warning("⚠️ Carregue os dados na página principal ou verifique o arquivo Excel.")
-    st.stop()
-
-st.markdown("""
-    <style>
-        .block-container { padding-top: 1rem; padding-bottom: 1rem; }
-    </style>
-    """, unsafe_allow_html=True)
-
-col_logo, col_titulo = st.columns([1, 15])
-
-with col_logo:
-    st.image(logo, width=100) 
-
-with col_titulo:
-    st.title('Live Tracker: Projeção de Carga Física')
-
-warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
-
-# =====================================================================
-# RECUPERANDO DADOS GLOBAIS
-# =====================================================================
 if 'df_global' not in st.session_state:
     st.warning("⚠️ Carregue os dados na página principal (Home) primeiro.")
     st.stop()
 
+
+# =====================================================================
+# DADOS GLOBAIS
+# =====================================================================
+
+warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 df_completo = st.session_state['df_global'].copy()
 DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
 
@@ -326,11 +311,8 @@ for periodo in [1, 2]:
             k0, k1, k2, k3, k4, k5, k6 = st.columns(7)
             cor_delta = "normal" if metrica_selecionada in ["V4 Dist", "HIA", "Total Distance"] else "inverse"
             
-            k0.metric(
-                label="Volume no Corte", 
-                value=fmt_dist(carga_atual),
-                help="O volume total acumulado pelo atleta do início do jogo até ao minuto exato selecionado no slider de corte."
-            )
+            with k0:
+                ui.renderizar_card_kpi("Volume no Corte", fmt_dist(carga_atual), icone="⏳")
             
             k1.metric(
                 label="Ritmo até o Corte vs Histórico", 
@@ -348,11 +330,8 @@ for periodo in [1, 2]:
                 help="O valor principal compara a média da equipe hoje com a média histórica da equipe. O número em baixo (Atleta vs Time) mostra se este jogador está a fazer um esforço maior ou menor que o resto da equipe."
             )
             
-            k3.metric(
-                label=f"Projeção Final (min {minuto_final_proj})", 
-                value=fmt_dist(carga_projetada),
-                help="O valor calculado pela Inteligência Artificial para o minuto projetado."
-            )
+            with k3:
+                ui.renderizar_card_kpi(f"Projeção (min {minuto_final_proj})", fmt_dist(carga_projetada), cor_borda="#F59E0B", icone="🚀")
             
             k4.metric(
                 label="Ritmo Projetado", 

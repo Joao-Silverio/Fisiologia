@@ -1,27 +1,29 @@
-# ADF_Online/visual.py
+# Source/UI/visual.py
 import os
 
-# 1. IDENTIDADE DO CLUBE (Fácil de alterar para novos clientes)
+# Caminho raiz dinâmico (Volta de UI -> Source -> ADF_Online)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 1. IDENTIDADE
 CLUBE = {
     "nome": "Barra FC",
     "sigla": "BFC",
-    "logo_path": os.path.join(os.path.dirname(__file__), 'BarraFC.png')
+    "logo_path": os.path.join(BASE_DIR, 'Assets', 'BarraFC.png')
 }
 
-# 2. PALETA DE CORES (Baseada no escudo do clube)
+# 2. PALETA DE CORES (DARK MODE MODERNO)
 CORES = {
-    "primaria": "#2E7D32",      # Verde Barra FC
-    "secundaria": "#81C784",    # Verde claro
-    "fundo_card": "#FFFFFF",
-    "texto_escuro": "#1E293B",
-    "texto_claro": "#64748B",
+    "primaria": "#3B82F6",      # Azul vibrante (Botões e destaques principais)
+    "secundaria": "#60A5FA",    # Azul claro
+    "fundo_card": "#1E293B",    # Fundo dos cartões (Cinza/Azul muito escuro)
+    "texto_escuro": "#F8FAFC",  # Branco/Gelo (No dark mode, o "texto_escuro" principal vira claro para dar contraste)
+    "texto_claro": "#94A3B8",   # Cinza chumbo (Subtítulos)
     "alerta_fadiga": "#EF4444", # Vermelho
     "aviso_carga": "#F59E0B",   # Laranja
     "ok_prontidao": "#10B981"   # Verde
 }
 
-# 3. DICIONÁRIO PADRÃO DO PLOTLY
-# Isso garante que todos os gráficos do sistema nasçam com o visual do clube
+# 3. DICIONÁRIO PADRÃO DO PLOTLY (Para os gráficos ficarem com fundo escuro)
 PLOTLY_TEMPLATE = {
     "layout": {
         "font": {"family": "Inter, sans-serif", "color": CORES["texto_escuro"]},

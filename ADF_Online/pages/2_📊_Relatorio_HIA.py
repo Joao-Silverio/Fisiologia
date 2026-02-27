@@ -4,20 +4,21 @@ import numpy as np
 import plotly.graph_objs as go
 import plotly.express as px
 import warnings
-import ADF_Online.Source.Dados.config as config # <--- IMPORTANDO O CONFIG
+
+# 1. Novas Importações
+import Source.Dados.config as config
+from Source.Dados.data_loader import obter_hora_modificacao, load_global_data
 from streamlit_autorefresh import st_autorefresh
-from ADF_Online.Source.Dados.data_loader import obter_hora_modificacao, load_global_data
+import Source.UI.visual as visual
+import Source.UI.components as ui
 
-st.set_page_config(page_title="Relatório HIA - Timeline", layout="wide")
-
-st.markdown("""
-    <style>
-        .block-container { padding-top: 1rem; padding-bottom: 1rem; }
-    </style>
-    """, unsafe_allow_html=True)
+# 2. Configuração Visual
+st.set_page_config(page_title=f"Relatório HIA | {visual.CLUBE['sigla']}", layout="wide")
 
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
-st.title("⚡ Timeline HIA: Espectro de Intensidade")
+
+# 3. Cabeçalho Padronizado
+ui.renderizar_cabecalho("Timeline HIA", "Espectro de Intensidade e Ações V4+")
 
 # 1. Pede à página para "piscar os olhos" a cada 2 segundos (2000 ms)
 # Usa uma "key" diferente para cada página (ex: "refresh_comparacao", "refresh_hia")
@@ -150,25 +151,14 @@ for periodo in periodos_para_analise:
         # =====================================================================
         k1, k2, k3, k4, k5 = st.columns(5)
         
-        # 1. Minutos Jogados (Inteiro)
-        k1.metric("Minutos Jogados", f"{minuto_maximo} min")
+        with k1: ui.renderizar_card_kpi("Minutos Jogados", f"{minuto_maximo}m", icone="⏱️")
+        with k2: ui.renderizar_card_kpi("HIA Total", f"{total_hia_periodo:.2f}", cor_borda=visual.CORES["alerta_fadiga"], icone="⚡")
         
-        # 2. HIA Total (2 casas decimais)
-        k2.metric("HIA Total", f"{total_hia_periodo:.2f} ações")
+        # Este deixamos padrão por causa da setinha de "delta"
+        k3.metric("Média da Equipe (HIA)", f"{media_hia_equipe:.2f} ações", delta=f"{delta_vs_equipe:+.2f}% vs Equipe")
         
-        # 3. Média da Equipe (2 casas decimais + Delta %)
-        k3.metric(
-            "Média da Equipe (HIA)", 
-            f"{media_hia_equipe:.2f} ações", 
-            delta=f"{delta_vs_equipe:+.2f}% vs Equipe", 
-            delta_color="normal"
-        )
-        
-        # 4. Densidade (2 casas decimais)
-        k4.metric("Densidade (HIA/min)", f"{densidade:.2f}")
-        
-        # 5. Tempo sem ação/Gap (2 casas decimais)
-        k5.metric("Tempo Máx. sem Estímulo", f"{maior_gap_descanso} min", delta="Recuperação", delta_color="normal", help="Maior sequência de minutos sem ações de alta intensidade, indicando o tempo máximo de recuperação durante o período.")
+        with k4: ui.renderizar_card_kpi("Densidade (HIA/min)", f"{densidade:.2f}", icone="📊")
+        with k5: ui.renderizar_card_kpi("Tempo sem Estímulo", f"{maior_gap_descanso}m", cor_borda=visual.CORES["ok_prontidao"], icone="🔋")
 
         # =====================================================================
         # GRÁFICO EMPILHADO (Ajustado para 2 casas decimais no hover)

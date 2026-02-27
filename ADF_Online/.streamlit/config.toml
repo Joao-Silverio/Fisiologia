@@ -1,0 +1,8 @@
+# .streamlit/config.toml
+[theme]
+base = "dark"
+primaryColor = "#3B82F6" # Azul primário
+backgroundColor = "#0F172A" # Fundo escuro absoluto (Estilo Tailwind Slate-900)
+secondaryBackgroundColor = "#1E293B" # Fundo do menu lateral (Slate-800)
+textColor = "#F8FAFC"
+font = "sans serif"

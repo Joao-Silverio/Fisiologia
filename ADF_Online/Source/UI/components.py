@@ -1,7 +1,7 @@
 # ADF_Online/ui_components.py
 import streamlit as st
 from PIL import Image
-import visual
+import Source.UI.visual as visual
 
 def renderizar_cabecalho(titulo, subtitulo):
     """Gera um cabeçalho padrão, com a logo do clube e linha de separação moderna."""

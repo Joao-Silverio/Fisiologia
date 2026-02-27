@@ -2,24 +2,19 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import numpy as np
+
+# 1. Novas Importações
+import Source.Dados.config as config
+from Source.Dados.data_loader import obter_hora_modificacao, load_global_data
 from streamlit_autorefresh import st_autorefresh
-from ADF_Online.Source.Dados.data_loader import obter_hora_modificacao, load_global_data
-import ADF_Online.Source.Dados.config as config
+import Source.UI.visual as visual
+import Source.UI.components as ui
 
-# ==========================================
-# 1. CONFIGURAÇÃO E ESTILO
-# ==========================================
-st.set_page_config(page_title="Raio-X: Duelo de Atletas", layout="wide")
+# 2. Configuração Visual
+st.set_page_config(page_title=f"Comparação | {visual.CLUBE['sigla']}", layout="wide")
 
-st.markdown("""
-    <style>
-        .block-container { padding-top: 1rem; padding-bottom: 1rem; }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.title("⚔️ Raio-X: Duelo de Atletas (Head-to-Head)")
-st.markdown("Comparação direta de performance física e mecânica no mesmo jogo.")
+# 3. Cabeçalho Padronizado
+ui.renderizar_cabecalho("Batalha de Atletas", "Comparativo direto de performance e métricas de GPS")
 
 # 1. Pede à página para "piscar os olhos" a cada 2 segundos (2000 ms)
 # Usa uma "key" diferente para cada página (ex: "refresh_comparacao", "refresh_hia")

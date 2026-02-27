@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 import shutil
-import ADF_Online.Source.Dados.config as config
+import Source.Dados.config as config
 import streamlit as st
 
 def extrair_diff_gols(placar):

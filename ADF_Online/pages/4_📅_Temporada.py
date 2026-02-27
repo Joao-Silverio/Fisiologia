@@ -2,23 +2,19 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import ADF_Online.Source.Dados.config as config
+
+# 1. Novas Importações
+import Source.Dados.config as config
+from Source.Dados.data_loader import obter_hora_modificacao, load_global_data
 from streamlit_autorefresh import st_autorefresh
-from ADF_Online.Source.Dados.data_loader import obter_hora_modificacao, load_global_data
+import Source.UI.visual as visual
+import Source.UI.components as ui
 
-# =====================================================================
-# 1. CONFIGURAÇÃO E ESTILO
-# =====================================================================
-st.set_page_config(page_title="Temporada - Visão Geral", layout="wide")
+# 2. Configuração Visual
+st.set_page_config(page_title=f"Temporada | {visual.CLUBE['sigla']}", layout="wide")
 
-st.markdown("""
-    <style>
-        .block-container { padding-top: 1rem; padding-bottom: 1rem; }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.title("📅 Raio-X da Temporada")
-st.markdown("Análise macro do desgaste e volume da equipa ao longo do calendário de jogos.")
+# 3. Cabeçalho Padronizado
+ui.renderizar_cabecalho("Raio-X da Temporada", "Análise macro do desgaste da equipa ao longo do calendário")
 
 # =====================================================================
 # 2. CARREGAMENTO E PREPARAÇÃO DE DADOS (MACRO)
@@ -137,18 +133,20 @@ if df_plot.empty:
 # =====================================================================
 st.markdown("### 🏆 Resumo Global (Filtros Aplicados)")
 
-k1, k2, k3, k4 = st.columns(4)
-
 total_jogos = df_plot['Data'].nunique()
 media_dist = df_plot['Total Distance'].mean() if 'Total Distance' in df_plot.columns else 0
 media_hia = df_plot['HIA'].mean() if 'HIA' in df_plot.columns else 0
 media_load = df_plot['Player Load'].mean() if 'Player Load' in df_plot.columns else 0
 
-k1.metric("Jogos Analisados", f"{total_jogos}", help="Quantidade de partidas dentro dos filtros selecionados.")
-k2.metric("Média de Volume / Jogo", f"{media_dist:.0f} m", help=f"Distância média percorrida por {visao_tipo.lower()} por partida.")
-k3.metric("Média de HIA / Jogo", f"{media_hia:.0f} ações", help=f"Quantidade média de ações de alta intensidade por partida.")
-k4.metric("Desgaste Médio (Load)", f"{media_load:.0f}", help="Carga mecânica (Player Load) média por partida.")
-
+k1, k2, k3, k4 = st.columns(4)
+with k1: 
+    ui.renderizar_card_kpi("Jogos Analisados", f"{total_jogos}", icone="📅")
+with k2: 
+    ui.renderizar_card_kpi("Média de Volume / Jogo", f"{media_dist:.0f} m", icone="🏃")
+with k3: 
+    ui.renderizar_card_kpi("Média de HIA / Jogo", f"{media_hia:.0f} ações", cor_borda=visual.CORES["alerta_fadiga"], icone="🔥")
+with k4: 
+    ui.renderizar_card_kpi("Desgaste Médio / Jogo", f"{media_load:.0f}", cor_borda=visual.CORES["aviso_carga"], icone="🏋️‍♂️")
 st.divider()
 
 # =====================================================================

@@ -7,7 +7,7 @@ import os
 import pickle
 import numpy as np
 import pandas as pd
-import ADF_Online.Source.Dados.config as config
+import Source.Dados.config as config
 
 MAPA_METRICAS = {
     'Dist_Total': 'Total Distance',

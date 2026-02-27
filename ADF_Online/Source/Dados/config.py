@@ -6,10 +6,10 @@ import os
 # Pega o diretório atual do config.py (que agora é ADF_Online/src/data)
 DIR_ATUAL = os.path.dirname(os.path.abspath(__file__))
 
-BASE_DIR = os.path.dirname(os.path.abspath(DIR_ATUAL))
+BASE_DIR = os.path.dirname(os.path.dirname(DIR_ATUAL))
 
 ARQUIVO_ORIGINAL = os.path.join(BASE_DIR, 'Data_Files', 'ADF OnLine 2024.xlsb')
-ARQUIVO_TEMP = ARQUIVO_TEMP = os.path.join(BASE_DIR, 'Data_Files', 'ADF_TEMP_HOME.xlsb')
+ARQUIVO_TEMP = os.path.join(BASE_DIR, 'Data_Files', 'ADF_TEMP_HOME.xlsb')
 
 # Adicionando o caminho oficial da pasta de modelos
 DIRETORIO_MODELOS = os.path.join(BASE_DIR, 'Models')

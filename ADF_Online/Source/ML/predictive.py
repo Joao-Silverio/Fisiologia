@@ -15,8 +15,9 @@ import pickle
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import xgboost as xgb
-import ADF_Online.Source.Dados.config as config
-from ADF_Online.Source.Dados.data_loader import load_global_data
+
+import Source.Dados.config as config
+from Source.Dados.data_loader import load_global_data
 
 warnings.filterwarnings('ignore')
 
