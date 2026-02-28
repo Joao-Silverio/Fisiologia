@@ -73,13 +73,10 @@ def renderizar_card_kpi(titulo, valor, cor_borda=None, icone="📊", delta=None,
     """
     st.markdown(html, unsafe_allow_html=True)
 
-import streamlit as st
-import Source.UI.visual as visual
-
 def renderizar_menu_superior(pagina_atual="Home"):
     """
-    Injeta o CSS para ocultar a sidebar padrão e renderiza um menu superior moderno.
-    Ataca os data-testids oficiais do Streamlit para vencer o config.toml.
+    Injeta o CSS usando uma âncora (#menu-ancora) para estilizar os botões 
+    subsequentes sem quebrar o DOM nativo do Streamlit no deploy online.
     """
     st.markdown(
         f"""
@@ -96,17 +93,16 @@ def renderizar_menu_superior(pagina_atual="Home"):
                 display: none !important; 
             }}
             
-            /* 2. Container flutuante do Menu */
-            .home-nav-wrap {{
+            /* 2. Container flutuante do Menu (Alvo: a primeira div após a nossa âncora) */
+            #menu-ancora + div {{
                 position: sticky; top: 0.5rem; z-index: 9999;
                 background: rgba(15, 23, 42, 0.85);
                 border: 1px solid #334155; border-radius: 14px;
                 padding: 10px; backdrop-filter: blur(10px); margin-bottom: 1.5rem;
             }}
 
-            /* 🟢 3. BOTÃO ATIVO (Forçando a sobreposição do config.toml) */
-            /* O Streamlit usa baseButton-primary para botões type="primary" */
-            .home-nav-wrap button[data-testid="baseButton-primary"] {{
+            /* 🟢 3. BOTÃO ATIVO */
+            #menu-ancora + div button[data-testid="baseButton-primary"] {{
                 background-color: #FFFFFF !important;
                 border: 1px solid #FFFFFF !important;
                 border-radius: 10px !important;
@@ -114,44 +110,41 @@ def renderizar_menu_superior(pagina_atual="Home"):
                 min-height: 42px !important;
             }}
             
-            /* Força TODO o texto e ícone dentro do botão primário a ser preto */
-            .home-nav-wrap button[data-testid="baseButton-primary"] * {{
+            #menu-ancora + div button[data-testid="baseButton-primary"] * {{
                 color: #000000 !important;
                 font-weight: 800 !important;
             }}
 
-            /* Efeito hover (passar o rato) do botão selecionado */
-            .home-nav-wrap button[data-testid="baseButton-primary"]:hover {{
-                background-color: #E2E8F0 !important; /* Um cinza muito claro */
+            #menu-ancora + div button[data-testid="baseButton-primary"]:hover {{
+                background-color: #E2E8F0 !important; 
                 border-color: #E2E8F0 !important;
             }}
 
             /* 🔴 4. BOTÕES INATIVOS */
-            /* O Streamlit usa baseButton-secondary para botões type="secondary" */
-            .home-nav-wrap button[data-testid="baseButton-secondary"] {{
+            #menu-ancora + div button[data-testid="baseButton-secondary"] {{
                 background-color: transparent !important;
                 border: 1px solid #334155 !important;
                 border-radius: 10px !important;
                 min-height: 42px !important;
             }}
             
-            /* Cor do texto dos botões inativos */
-            .home-nav-wrap button[data-testid="baseButton-secondary"] p,
-            .home-nav-wrap button[data-testid="baseButton-secondary"] span {{
+            #menu-ancora + div button[data-testid="baseButton-secondary"] p,
+            #menu-ancora + div button[data-testid="baseButton-secondary"] span {{
                 color: {visual.CORES.get('texto_claro', '#94A3B8')} !important;
                 font-weight: 500 !important;
             }}
 
-            /* Hover dos botões inativos */
-            .home-nav-wrap button[data-testid="baseButton-secondary"]:hover {{
+            #menu-ancora + div button[data-testid="baseButton-secondary"]:hover {{
                 border-color: {visual.CORES.get('secundaria', '#60A5FA')} !important;
                 background-color: rgba(96, 165, 250, 0.1) !important;
             }}
-            .home-nav-wrap button[data-testid="baseButton-secondary"]:hover p,
-            .home-nav-wrap button[data-testid="baseButton-secondary"]:hover span {{
+            #menu-ancora + div button[data-testid="baseButton-secondary"]:hover p,
+            #menu-ancora + div button[data-testid="baseButton-secondary"]:hover span {{
                 color: #FFFFFF !important;
             }}
         </style>
+        
+        <div id="menu-ancora"></div>
         """,
         unsafe_allow_html=True,
     )
@@ -167,8 +160,7 @@ def renderizar_menu_superior(pagina_atual="Home"):
         ("pages/6_👤_Individual_Atleta.py", "Atleta", ":material/person:"),
     ]
 
-    # 6. Renderização dos Botões
-    st.markdown("<div class='home-nav-wrap'>", unsafe_allow_html=True)
+    # 6. Renderização dos Botões (O CSS atingirá automaticamente este bloco)
     cols = st.columns(len(nav_items))
     
     for col, (caminho_pagina, label, icon) in zip(cols, nav_items):
@@ -184,5 +176,3 @@ def renderizar_menu_superior(pagina_atual="Home"):
             ):
                 if not is_active:
                     st.switch_page(caminho_pagina)
-                
-    st.markdown("</div>", unsafe_allow_html=True)
