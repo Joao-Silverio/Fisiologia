@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.graph_objs as go
-import plotly.express as px
 import warnings
+import plotly.express as px
+import plotly.graph_objects as go
 
 # Importações seguindo o padrão da arquitetura
 import Source.Dados.config as config
@@ -37,63 +36,82 @@ if 'df_global' not in st.session_state:
 df_completo = st.session_state['df_global'].copy()
 
 # =====================================================================
-# FILTROS: HIERARQUIA DE FUNIL (JOGO -> ATLETA)
+# FILTROS: HIERARQUIA DE FUNIL (JOGO -> ATLETA -> PERÍODO)
 # =====================================================================
 st.markdown("### 🔍 Seleção de Análise")
 
 with st.container():
-    col_j, col_a = st.columns([2, 2])
+    col_j, col_a, col_p = st.columns([2, 2, 1])
     
-    # 1. Seleção do Jogo Primeiro (Destaque)
+    # 1. Seleção do Jogo
     lista_jogos = df_completo.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)['Data_Display'].tolist()
     with col_j:
-        jogo_destaque_display = st.selectbox("🎯 Selecione o Jogo em Destaque:", lista_jogos)
+        jogo_destaque_display = st.selectbox("🎯 Jogo em Destaque:", lista_jogos)
     
     jogo_destaque_data = df_completo[df_completo['Data_Display'] == jogo_destaque_display]['Data'].iloc[0]
     df_jogo_base = df_completo[df_completo['Data'] == jogo_destaque_data]
 
-    # 2. Seleção do Atleta (Apenas quem jogou nesse jogo)
+    # 2. Seleção do Atleta
     lista_atletas = sorted(df_jogo_base['Name'].dropna().unique())
     with col_a:
-        atleta_selecionado = st.selectbox("🏃 Selecione o Atleta:", lista_atletas)
+        atleta_selecionado = st.selectbox("🏃 Atleta:", lista_atletas)
+        
+    # 3. Seleção do Período
+    with col_p:
+        opcoes_periodo = ["Jogo Completo", "1º Tempo", "2º Tempo"]
+        periodo_selecionado = st.selectbox("⏱️ Período:", opcoes_periodo)
 
-# Separação de Dados: Jogo Destaque vs Histórico do Atleta
+# =====================================================================
+# PROCESSAMENTO DOS DADOS COM BASE NOS FILTROS (CORREÇÃO DA SOMA)
+# =====================================================================
+# Isola todos os dados do atleta selecionado
 df_atleta_total = df_completo[df_completo['Name'] == atleta_selecionado].copy()
+
+# 🚨 CORREÇÃO CRÍTICA DAS MÉTRICAS (EVITAR DUPLICIDADE)
+# Mantém APENAS as linhas que são explicitamente de 1º ou 2º tempo.
+# Isso impede que o sistema some linhas de "Aquecimento" ou a linha resumo de "Match/Jogo" que o GPS gera.
+df_atleta_total = df_atleta_total[df_atleta_total['Período'].astype(str).str.contains('1|2', regex=True, na=False)]
+
+# Aplica o filtro de período de forma robusta
+if periodo_selecionado == "1º Tempo":
+    df_atleta_total = df_atleta_total[df_atleta_total['Período'].astype(str).str.contains('1', na=False)]
+elif periodo_selecionado == "2º Tempo":
+    df_atleta_total = df_atleta_total[df_atleta_total['Período'].astype(str).str.contains('2', na=False)]
+
+# Separação: Jogo Destaque vs Histórico Restante (já com o período filtrado e corrigido)
 df_jogo_atleta = df_atleta_total[df_atleta_total['Data'] == jogo_destaque_data]
 df_historico_atleta = df_atleta_total[df_atleta_total['Data'] != jogo_destaque_data]
 
 # =====================================================================
-# KPIs DE PERFORMANCE (DESTAQUE VS MÉDIA DA TEMPORADA)
+# KPIs DINÂMICOS DA PÁGINA INDIVIDUAL
 # =====================================================================
-st.markdown(f"#### 📊 Performance: {atleta_selecionado} em {jogo_destaque_display}")
+st.markdown(f"#### 👤 Painel Individual: {atleta_selecionado} | Jogo {jogo_destaque_display} ({periodo_selecionado})")
 
-metrics_map = [
-    {"label": "Distância Total", "key": "Total Distance", "unit": "m", "color": visual.CORES["primaria"]},
-    {"label": "Ações V4+", "key": "V4 To8 Eff", "unit": "", "color": visual.CORES["secundaria"]},
-    {"label": "Ações HIA", "key": "HIA", "unit": "", "color": visual.CORES["alerta_fadiga"]},
-    {"label": "Carga (PL)", "key": "Player Load", "unit": "", "color": visual.CORES["aviso_carga"]}
-]
+total_jogos = df_atleta_total['Data'].nunique()
 
-cols_kpi = st.columns(len(metrics_map))
+# LÓGICA DE MINUTAGEM: Pega o valor máximo de cada período jogado
+if 'Min_Num' in df_jogo_atleta.columns and not df_jogo_atleta.empty:
+    total_minutos = df_jogo_atleta.groupby('Período')['Min_Num'].max().sum()
+else:
+    total_minutos = 0
 
-for i, met in enumerate(metrics_map):
-    val_jogo = df_jogo_atleta[met['key']].sum()
-    # Média por jogo no histórico
-    val_hist = df_historico_atleta.groupby('Data')[met['key']].sum().mean() if not df_historico_atleta.empty else val_jogo
-    
-    delta_pct = ((val_jogo / val_hist) - 1) * 100 if val_hist > 0 else 0
-    
-    with cols_kpi[i]:
-        ui.renderizar_card_kpi(
-            met['label'], 
-            f"{val_jogo:.1f}{met['unit']}" if "Dist" in met['key'] else f"{val_jogo:.0f}", 
-            cor_borda=met['color'],
-            delta=f"{delta_pct:+.1f}% vs Média",
-            delta_color="normal" if met['key'] != "Player Load" else "inverse"
-        )
+if 'Min_Num' in df_atleta_total.columns and total_jogos > 0:
+    minutos_por_jogo = df_atleta_total.groupby(['Data', 'Período'])['Min_Num'].max().groupby('Data').sum()
+    media_minutos = minutos_por_jogo.mean()
+else:
+    media_minutos = 0
+
+col_kpi_1, col_kpi_2, col_kpi_3 = st.columns(3)
+
+with col_kpi_1:
+    ui.renderizar_card_kpi("Jogos no Histórico", f"{total_jogos}", cor_borda=visual.CORES["primaria"])
+with col_kpi_2:
+    ui.renderizar_card_kpi(f"Minutagem ({periodo_selecionado})", f"{total_minutos:.0f} min", cor_borda=visual.CORES["secundaria"])
+with col_kpi_3:
+    ui.renderizar_card_kpi(f"Média de Minutos ({periodo_selecionado})", f"{media_minutos:.0f} min", cor_borda=visual.CORES["aviso_carga"])
 
 # =====================================================================
-# GRÁFICO DE EVOLUÇÃO (DESTAQUE COLORIDO)
+# ABAS DE ANÁLISE JOGO A JOGO COM DADOS REAIS
 # =====================================================================
 st.markdown("### 📈 Linha do Tempo da Temporada")
 
@@ -124,38 +142,115 @@ fig_ev.update_layout(
     showlegend=False
 )
 
-st.plotly_chart(fig_ev, width='stretch')
+# use_container_width removido conforme solicitado
+st.plotly_chart(fig_ev)
 
-# =====================================================================
-# RADAR DE INTENSIDADE (PERFIL DE AÇÕES)
-# =====================================================================
-st.markdown("### ⏱️ Perfil de Intensidade por Período")
-
-c1, c2 = st.columns(2)
-componentes = [c for c in config.COLS_COMPONENTES_HIA if c in df_completo.columns]
-
-for idx, periodo in enumerate([1, 2]):
-    with [c1, c2][idx]:
-        st.write(f"**{periodo}º Tempo**")
-        df_p_jogo = df_jogo_atleta[df_jogo_atleta['Período'] == periodo]
-        df_p_hist = df_historico_atleta[df_historico_atleta['Período'] == periodo]
+# ----------------- ABA 2: COMPARATIVO -----------------
+with aba_comparativo:
+    st.markdown("#### Diferenças do jogo selecionado para a sua média histórica")
+    
+    metricas_alvo = ["Total Distance", "Player Load", "HIA", "V5 To8 Eff", "V4 Dist", "V5 Dist"]
+    
+    if not df_jogo_atleta.empty and not df_historico_atleta.empty:
+        # Jogo Atual
+        jogo_atual_stats = df_jogo_atleta[metricas_alvo].sum()
         
-        if not df_p_jogo.empty and componentes:
-            val_jogo = df_p_jogo[componentes].sum().values
-            val_hist = df_p_hist.groupby('Data')[componentes].sum().mean().values if not df_p_hist.empty else val_jogo
-            
-            fig_rad = go.Figure()
-            fig_rad.add_trace(go.Scatterpolar(r=val_hist, theta=componentes, fill='toself', name='Média Temporada', line=dict(color=visual.CORES['texto_claro'])))
-            fig_rad.add_trace(go.Scatterpolar(r=val_jogo, theta=componentes, fill='toself', name='Jogo Atual', line=dict(color=visual.CORES['alerta_fadiga'])))
-            
-            fig_rad.update_layout(
-                template='plotly_dark',
-                polar=dict(radialaxis=dict(visible=True, showticklabels=False, gridcolor='#334155'),
-                           angularaxis=dict(gridcolor='#334155')),
-                paper_bgcolor='rgba(0,0,0,0)',
-                height=350,
-                margin=dict(t=30, b=30, l=50, r=50)
-            )
-            st.plotly_chart(fig_rad, key=f"radar_ind_{periodo}")
+        # Média Histórica do atleta
+        df_agrupado_hist = df_historico_atleta.groupby('Data')[metricas_alvo].sum()
+        media_historica = df_agrupado_hist.mean().fillna(0)
+        
+        df_comp = pd.DataFrame({
+            "Métrica": metricas_alvo,
+            "Jogo Atual": jogo_atual_stats.values.round(1),
+            "Média (Outros Jogos)": media_historica.values.round(1)
+        })
+        
+        df_comp['Diferença %'] = ((df_comp['Jogo Atual'] - df_comp['Média (Outros Jogos)']) / df_comp['Média (Outros Jogos)'] * 100).fillna(0)
+        
+        def formatar_cor(val):
+            cor = visual.CORES["ok_prontidao"] if val >= 0 else visual.CORES["alerta_fadiga"]
+            return f'<span style="color:{cor}; font-weight:bold;">{val:+.1f}%</span>'
+        
+        df_comp_display = df_comp.copy()
+        df_comp_display['Diferença %'] = df_comp_display['Diferença %'].apply(formatar_cor)
+        
+        st.write(df_comp_display.to_html(escape=False, index=False), unsafe_allow_html=True)
+    else:
+        st.warning("Não há dados suficientes para gerar o comparativo. O atleta precisa ter participado de outros jogos.")
+
+# ----------------- ABA 3: CLUSTERS -----------------
+with aba_clusters:
+    st.markdown(f"#### Perfil de Intensidade: V4 Dist vs Distância Total ({periodo_selecionado})")
+    
+    # Agrupa todos os jogos do atleta para calcular a Intensidade (V4 Dist / Total Distance)
+    df_intensidade = df_atleta_total.groupby(['Data', 'Data_Display'])[['Total Distance', 'V4 Dist']].sum().reset_index()
+    
+    # Evita divisão por zero substituindo 0 por 1 no Total Distance para o cálculo
+    df_intensidade['Intensidade (%)'] = (df_intensidade['V4 Dist'] / df_intensidade['Total Distance'].replace(0, 1)) * 100
+
+    if not df_jogo_atleta.empty and len(df_intensidade) > 0:
+        jogo_atual_row = df_intensidade[df_intensidade['Data'] == jogo_destaque_data]
+        
+        if not jogo_atual_row.empty:
+            intensidade_atual = jogo_atual_row['Intensidade (%)'].values[0]
+            dist_total_atual = jogo_atual_row['Total Distance'].values[0]
+            v4_atual = jogo_atual_row['V4 Dist'].values[0]
         else:
-            st.info(f"Sem dados para o {periodo}º tempo.")
+            intensidade_atual = dist_total_atual = v4_atual = 0
+
+        p33 = df_intensidade['Intensidade (%)'].quantile(0.33)
+        p66 = df_intensidade['Intensidade (%)'].quantile(0.66)
+
+        if intensidade_atual >= p66:
+            nome_cluster = "🔴 Alta Intensidade"
+            desc_cluster = "O atleta correu em alta velocidade numa proporção muito maior que o seu normal."
+        elif intensidade_atual >= p33:
+            nome_cluster = "🟡 Intensidade Moderada"
+            desc_cluster = "A relação entre a distância percorrida e o esforço intenso está no padrão habitual."
+        else:
+            nome_cluster = "🟢 Baixa Intensidade"
+            desc_cluster = "Jogo cadenciado. O volume de V4 foi baixo em relação à distância total percorrida."
+
+        c1, c2, c3 = st.columns([1, 1, 1.5])
+
+        with c1:
+            st.markdown("**Jogo Analisado**")
+            st.metric("Índice de Intensidade", f"{intensidade_atual:.1f}%")
+            st.caption(f"**V4 Dist:** {v4_atual:.1f} m")
+            st.caption(f"**Dist Total:** {dist_total_atual:.1f} m")
+
+        with c2:
+            st.markdown("**Classificação do Jogo**")
+            st.info(f"**{nome_cluster}**\n\n{desc_cluster}")
+            st.write(f"Média Histórica do Atleta: **{df_intensidade['Intensidade (%)'].mean():.1f}%**")
+
+        with c3:
+            st.markdown("**🏆 Top 3 Jogos Mais Intensos (Histórico)**")
+            top_3 = df_intensidade.sort_values(by='Intensidade (%)', ascending=False).head(3)
+            
+            top_3_display = top_3[['Data_Display', 'Intensidade (%)', 'V4 Dist']].rename(columns={'Data_Display': 'Jogo'})
+            top_3_display['Intensidade (%)'] = top_3_display['Intensidade (%)'].round(1).astype(str) + '%'
+            top_3_display['V4 Dist'] = top_3_display['V4 Dist'].round(1)
+            
+            st.dataframe(top_3_display, use_container_width=True, hide_index=True)
+    else:
+        st.info("Dados insuficientes para calcular clusters de intensidade.")
+
+# ----------------- ABA 4: INSIGHTS -----------------
+with aba_insights:
+    st.markdown("#### 💡 Insights Automatizados")
+    
+    if not df_jogo_atleta.empty and not df_historico_atleta.empty:
+        hia_diff = df_comp[df_comp['Métrica'] == 'HIA']['Diferença %'].values[0]
+        dist_diff = df_comp[df_comp['Métrica'] == 'Total Distance']['Diferença %'].values[0]
+        
+        if hia_diff > 10:
+            st.success(f"📈 **Alta Intensidade Elevada:** O atleta teve um volume de ações de alta intensidade (HIA) {hia_diff:.1f}% acima da sua média no {periodo_selecionado.lower()}. Monitorar fadiga muscular/recuperação.")
+        elif hia_diff < -10:
+            st.warning(f"📉 **Queda de Intensidade:** O atleta realizou {abs(hia_diff):.1f}% menos ações intensas do que o seu padrão normal neste recorte.")
+        else:
+            st.info(f"⚖️ **Intensidade Padrão:** O HIA do atleta manteve-se equilibrado com sua média histórica no {periodo_selecionado.lower()}.")
+            
+        st.markdown(f"- O Volume de **Distância Total** no {periodo_selecionado.lower()} variou **{dist_diff:+.1f}%** em relação à média do atleta.")
+    else:
+        st.write("Sem base histórica suficiente para gerar insights comparativos.")
