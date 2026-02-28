@@ -78,17 +78,19 @@ df_historico_atleta = df_atleta_total[df_atleta_total['Data'] != jogo_destaque_d
 # =====================================================================
 st.markdown(f"#### 👤 Painel Individual: {atleta_selecionado} | Jogo {jogo_destaque_display} ({periodo_selecionado})")
 
-# Cálculo das KPIs de Minutagem usando a coluna 'Min_Num'
 total_jogos = df_atleta_total['Data'].nunique()
 
-if 'Min_Num' in df_jogo_atleta.columns:
-    total_minutos = df_jogo_atleta['Min_Num'].sum()
+# NOVA LÓGICA DE MINUTAGEM: Pega o valor máximo (último número) de cada período jogado
+if 'Min_Num' in df_jogo_atleta.columns and not df_jogo_atleta.empty:
+    # Agrupa por período e pega o máximo, depois soma (se for o jogo completo, soma T1+T2)
+    total_minutos = df_jogo_atleta.groupby('Período')['Min_Num'].max().sum()
 else:
     total_minutos = 0
 
 if 'Min_Num' in df_atleta_total.columns and total_jogos > 0:
-    # Agrupa por jogo para somar os minutos daquele período no jogo, depois tira a média geral
-    media_minutos = df_atleta_total.groupby('Data')['Min_Num'].sum().mean()
+    # Para a média histórica: descobre os minutos de cada jogo (somando os máx de cada período) e tira a média
+    minutos_por_jogo = df_atleta_total.groupby(['Data', 'Período'])['Min_Num'].max().groupby('Data').sum()
+    media_minutos = minutos_por_jogo.mean()
 else:
     media_minutos = 0
 
@@ -184,9 +186,9 @@ with aba_minutagem:
     
     col1, col2 = st.columns([1, 1])
     with col1:
-        st.info(f"**{periodo_selecionado}:** {total_minutos:.1f} minutos jogados na partida selecionada.")
+        st.info(f"**{periodo_selecionado}:** {total_minutos:.0f} minutos jogados na partida selecionada.")
     with col2:
-        st.info(f"**Média Histórica ({periodo_selecionado}):** {media_minutos:.1f} minutos.")
+        st.info(f"**Média Histórica ({periodo_selecionado}):** {media_minutos:.0f} minutos.")
         
     if periodo_selecionado == "Jogo Completo":
         st.write("Dica: Selecione '1º Tempo' ou '2º Tempo' no filtro superior para ver a quebra exata de minutos por etapa.")
