@@ -59,18 +59,23 @@ with st.container():
         periodo_selecionado = st.selectbox("⏱️ Período:", opcoes_periodo)
 
 # =====================================================================
-# PROCESSAMENTO DOS DADOS COM BASE NOS FILTROS
+# PROCESSAMENTO DOS DADOS COM BASE NOS FILTROS (CORREÇÃO DA SOMA)
 # =====================================================================
 # Isola todos os dados do atleta selecionado
 df_atleta_total = df_completo[df_completo['Name'] == atleta_selecionado].copy()
 
-# Aplica o filtro de período de forma robusta procurando '1' ou '2' na coluna Período
+# 🚨 CORREÇÃO CRÍTICA DAS MÉTRICAS (EVITAR DUPLICIDADE)
+# Mantém APENAS as linhas que são explicitamente de 1º ou 2º tempo.
+# Isso impede que o sistema some linhas de "Aquecimento" ou a linha resumo de "Match/Jogo" que o GPS gera.
+df_atleta_total = df_atleta_total[df_atleta_total['Período'].astype(str).str.contains('1|2', regex=True, na=False)]
+
+# Aplica o filtro de período de forma robusta
 if periodo_selecionado == "1º Tempo":
     df_atleta_total = df_atleta_total[df_atleta_total['Período'].astype(str).str.contains('1', na=False)]
 elif periodo_selecionado == "2º Tempo":
     df_atleta_total = df_atleta_total[df_atleta_total['Período'].astype(str).str.contains('2', na=False)]
 
-# Separação: Jogo Destaque vs Histórico Restante (já com o período filtrado)
+# Separação: Jogo Destaque vs Histórico Restante (já com o período filtrado e corrigido)
 df_jogo_atleta = df_atleta_total[df_atleta_total['Data'] == jogo_destaque_data]
 df_historico_atleta = df_atleta_total[df_atleta_total['Data'] != jogo_destaque_data]
 
@@ -120,7 +125,7 @@ with aba_timeline:
     
     cols_analise = ['Total Distance', 'Player Load', 'HIA', 'V4 Dist', 'V5 Dist']
     
-    # 1. Agrupa as métricas de performance por jogo
+    # 1. Agrupa as métricas de performance por jogo (A soma agora está perfeitamente corrigida pelo filtro inicial)
     df_metricas_timeline = df_atleta_total.groupby(['Data', 'Data_Display'])[cols_analise].sum().reset_index()
     
     # 2. Calcula a minutagem correta POR JOGO para colocar no gráfico
@@ -146,16 +151,16 @@ with aba_timeline:
                 for val in df_evolucao[metrica_grafico]
             ]
             
-            # Construção do gráfico customizado (agora com TEXTO nas bolinhas)
+            # Construção do gráfico customizado
             fig = go.Figure()
             
             fig.add_trace(go.Scatter(
                 x=df_evolucao['Data_Display'],
                 y=df_evolucao[metrica_grafico],
-                mode='lines+markers+text', # Adicionado 'text' para mostrar o valor direto no gráfico
+                mode='lines+markers+text',
                 name=metrica_grafico,
-                text=df_evolucao[metrica_grafico].round(1), # Pega o valor arredondado para exibir
-                textposition='top center', # Posição do texto acima da bolinha
+                text=df_evolucao[metrica_grafico].round(1),
+                textposition='top center',
                 line=dict(color=visual.CORES["secundaria"], width=2),
                 marker=dict(size=10, color=cores_marcadores, line=dict(width=1, color=visual.CORES["fundo_card"])),
                 customdata=df_evolucao[['Minutagem']],
@@ -185,16 +190,13 @@ with aba_timeline:
         with col_b:
             st.markdown("**Resumo (Últimos 5 jogos)**")
             
-            # Pega os últimos 5 jogos
             df_resumo = df_evolucao[['Data_Display', metrica_grafico, 'Minutagem']].tail(5).sort_values('Data_Display', ascending=False)
             df_resumo.rename(columns={'Data_Display': 'Jogo'}, inplace=True)
             df_resumo[metrica_grafico] = df_resumo[metrica_grafico].round(1)
             
-            # Calcula a média destes últimos 5 jogos e cria uma nova linha
             media_resumo_metrica = df_resumo[metrica_grafico].mean().round(1)
             media_resumo_minutos = df_resumo['Minutagem'].mean().round(0)
             
-            # Adiciona a linha "MÉDIA" no final da tabela
             linha_media = pd.DataFrame([{'Jogo': 'MÉDIA', metrica_grafico: media_resumo_metrica, 'Minutagem': media_resumo_minutos}])
             df_resumo_final = pd.concat([df_resumo, linha_media], ignore_index=True)
             
@@ -246,7 +248,6 @@ with aba_clusters:
     df_intensidade['Intensidade (%)'] = (df_intensidade['V4 Dist'] / df_intensidade['Total Distance'].replace(0, 1)) * 100
 
     if not df_jogo_atleta.empty and len(df_intensidade) > 0:
-        # Pega os dados apenas do jogo selecionado no funil
         jogo_atual_row = df_intensidade[df_intensidade['Data'] == jogo_destaque_data]
         
         if not jogo_atual_row.empty:
@@ -256,7 +257,6 @@ with aba_clusters:
         else:
             intensidade_atual = dist_total_atual = v4_atual = 0
 
-        # Separa os clusters baseado no próprio histórico do atleta (divisão em 3 terços: 33% inferiores, 33% meio, 33% topo)
         p33 = df_intensidade['Intensidade (%)'].quantile(0.33)
         p66 = df_intensidade['Intensidade (%)'].quantile(0.66)
 
@@ -287,7 +287,6 @@ with aba_clusters:
             st.markdown("**🏆 Top 3 Jogos Mais Intensos (Histórico)**")
             top_3 = df_intensidade.sort_values(by='Intensidade (%)', ascending=False).head(3)
             
-            # Formatação da tabela do Top 3
             top_3_display = top_3[['Data_Display', 'Intensidade (%)', 'V4 Dist']].rename(columns={'Data_Display': 'Jogo'})
             top_3_display['Intensidade (%)'] = top_3_display['Intensidade (%)'].round(1).astype(str) + '%'
             top_3_display['V4 Dist'] = top_3_display['V4 Dist'].round(1)
