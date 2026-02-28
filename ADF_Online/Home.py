@@ -230,7 +230,7 @@ try:
                         xaxis_title="",
                         yaxis_title=""
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 else:
                     st.info("Sem datas válidas.")
             else:
