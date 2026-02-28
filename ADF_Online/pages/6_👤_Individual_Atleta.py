@@ -15,8 +15,8 @@ import Source.UI.components as ui
 st.set_page_config(page_title=f"Raio-X Individual | {visual.CLUBE['sigla']}", layout="wide", initial_sidebar_state="collapsed")
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
-#Chama MENU HORIZONTAL
-ui.renderizar_menu_superior(pagina_atual="Atleta") # <-- Nome tem que ser igual ao que você botou lá no nav_items
+# Chama MENU HORIZONTAL
+ui.renderizar_menu_superior(pagina_atual="Atleta")
 
 # Cabeçalho Padronizado
 ui.renderizar_cabecalho("Relatório Individual", "Análise de performance e comparação histórica")
@@ -68,8 +68,6 @@ with st.container():
 df_atleta_total = df_completo[df_completo['Name'] == atleta_selecionado].copy()
 
 # 🚨 CORREÇÃO CRÍTICA DAS MÉTRICAS (EVITAR DUPLICIDADE)
-# Mantém APENAS as linhas que são explicitamente de 1º ou 2º tempo.
-# Isso impede que o sistema some linhas de "Aquecimento" ou a linha resumo de "Match/Jogo" que o GPS gera.
 df_atleta_total = df_atleta_total[df_atleta_total['Período'].astype(str).str.contains('1|2', regex=True, na=False)]
 
 # Aplica o filtro de período de forma robusta
@@ -78,7 +76,7 @@ if periodo_selecionado == "1º Tempo":
 elif periodo_selecionado == "2º Tempo":
     df_atleta_total = df_atleta_total[df_atleta_total['Período'].astype(str).str.contains('2', na=False)]
 
-# Separação: Jogo Destaque vs Histórico Restante (já com o período filtrado e corrigido)
+# Separação: Jogo Destaque vs Histórico Restante
 df_jogo_atleta = df_atleta_total[df_atleta_total['Data'] == jogo_destaque_data]
 df_historico_atleta = df_atleta_total[df_atleta_total['Data'] != jogo_destaque_data]
 
@@ -89,7 +87,7 @@ st.markdown(f"#### 👤 Painel Individual: {atleta_selecionado} | Jogo {jogo_des
 
 total_jogos = df_atleta_total['Data'].nunique()
 
-# LÓGICA DE MINUTAGEM: Pega o valor máximo de cada período jogado
+# LÓGICA DE MINUTAGEM
 if 'Min_Num' in df_jogo_atleta.columns and not df_jogo_atleta.empty:
     total_minutos = df_jogo_atleta.groupby('Período')['Min_Num'].max().sum()
 else:
@@ -113,37 +111,101 @@ with col_kpi_3:
 # =====================================================================
 # ABAS DE ANÁLISE JOGO A JOGO COM DADOS REAIS
 # =====================================================================
-st.markdown("### 📈 Linha do Tempo da Temporada")
+st.markdown("### 🧭 Estrutura de Análise Jogo a Jogo")
 
-# Métrica selecionável via pills (padrão visuals)
-metrica_evol = st.pills("Visualizar Evolução de:", ["Total Distance", "V4 To8 Eff", "HIA", "Player Load"], default="Total Distance")
+# RECRIANDO AS ABAS QUE FORAM APAGADAS ACIDENTALMENTE
+aba_timeline, aba_comparativo, aba_clusters, aba_insights = st.tabs([
+    "📈 Linha do tempo",
+    "⚔️ Comparativo",
+    "🏃 Clusters Intensidade",
+    "💡 Insights"
+])
 
-df_ev = df_atleta_total.groupby(['Data', 'Data_Display'])[metrica_evol].sum().reset_index().sort_values('Data')
-df_ev['Status'] = df_ev['Data'].apply(lambda x: 'Destaque' if x == jogo_destaque_data else 'Histórico')
+# ----------------- ABA 1: TIMELINE -----------------
+with aba_timeline:
+    st.markdown("#### Evolução de performance por partida")
+    
+    cols_analise = ['Total Distance', 'Player Load', 'HIA', 'V4 Dist', 'V5 Dist']
+    
+    # Seu novo componente st.pills
+    metrica_grafico = st.pills("Visualizar Evolução de:", cols_analise, default="Total Distance")
+    
+    # 1. Agrupa as métricas de performance por jogo
+    df_metricas_timeline = df_atleta_total.groupby(['Data', 'Data_Display'])[cols_analise].sum().reset_index()
+    
+    # 2. Calcula a minutagem correta POR JOGO
+    if 'Min_Num' in df_atleta_total.columns:
+        df_minutos_timeline = df_atleta_total.groupby(['Data', 'Data_Display', 'Período'])['Min_Num'].max().groupby(['Data', 'Data_Display']).sum().reset_index(name='Minutagem')
+    else:
+        df_minutos_timeline = pd.DataFrame({'Data': df_metricas_timeline['Data'], 'Data_Display': df_metricas_timeline['Data_Display'], 'Minutagem': 0})
+        
+    # 3. Junta tudo em um dataframe só
+    df_evolucao = pd.merge(df_metricas_timeline, df_minutos_timeline, on=['Data', 'Data_Display']).sort_values('Data')
+    
+    if not df_evolucao.empty:
+        col_a, col_b = st.columns([2, 1])
+        with col_a:
+            # Cálculo da média da métrica selecionada
+            media_metrica = df_evolucao[metrica_grafico].mean()
+            
+            # Define as cores das bolinhas
+            cores_marcadores = [
+                visual.CORES["ok_prontidao"] if val >= media_metrica else visual.CORES["alerta_fadiga"] 
+                for val in df_evolucao[metrica_grafico]
+            ]
+            
+            # Restaurando o Gráfico Profissional go.Scatter
+            fig = go.Figure()
+            
+            fig.add_trace(go.Scatter(
+                x=df_evolucao['Data_Display'],
+                y=df_evolucao[metrica_grafico],
+                mode='lines+markers+text',
+                name=metrica_grafico,
+                text=df_evolucao[metrica_grafico].round(1),
+                textposition='top center',
+                line=dict(color=visual.CORES["secundaria"], width=2),
+                marker=dict(size=10, color=cores_marcadores, line=dict(width=1, color=visual.CORES["fundo_card"])),
+                customdata=df_evolucao[['Minutagem']],
+                hovertemplate="<b>Jogo:</b> %{x}<br>" +
+                              "<b>Valor:</b> %{y:.1f}<br>" +
+                              "<b>Minutagem:</b> %{customdata[0]:.0f} min<extra></extra>"
+            ))
+            
+            # Adiciona a linha pontilhada da média
+            fig.add_hline(
+                y=media_metrica, 
+                line_dash="dash", 
+                line_color=visual.CORES["texto_claro"],
+                annotation_text=f"Média: {media_metrica:.1f}", 
+                annotation_position="top left",
+                annotation_font_color=visual.CORES["texto_claro"]
+            )
+            
+            # Aplica o layout escuro
+            fig.update_layout(
+                title=f"Evolução: {metrica_grafico} ({periodo_selecionado})",
+                **visual.PLOTLY_TEMPLATE['layout']
+            )
+            
+            st.plotly_chart(fig, width='stretch')
 
-fig_ev = px.bar(
-    df_ev, x='Data_Display', y=metrica_evol, color='Status',
-    color_discrete_map={'Destaque': visual.CORES['alerta_fadiga'], 'Histórico': visual.CORES['primaria']},
-    text_auto='.0f'
-)
-
-# Adiciona linha de média
-media_geral = df_ev[metrica_evol].mean()
-fig_ev.add_hline(y=media_geral, line_dash="dash", line_color=visual.CORES['texto_claro'], 
-                 annotation_text=f"Média: {media_geral:.1f}")
-
-fig_ev.update_layout(
-    template='plotly_dark',
-    plot_bgcolor='rgba(0,0,0,0)',
-    paper_bgcolor='rgba(0,0,0,0)',
-    height=400,
-    xaxis_title=None,
-    yaxis_title=metrica_evol,
-    showlegend=False
-)
-
-# use_container_width removido conforme solicitado
-st.plotly_chart(fig_ev)
+        with col_b:
+            st.markdown("**Resumo (Últimos 5 jogos)**")
+            
+            df_resumo = df_evolucao[['Data_Display', metrica_grafico, 'Minutagem']].tail(5).sort_values('Data_Display', ascending=False)
+            df_resumo.rename(columns={'Data_Display': 'Jogo'}, inplace=True)
+            df_resumo[metrica_grafico] = df_resumo[metrica_grafico].round(1)
+            
+            media_resumo_metrica = df_resumo[metrica_grafico].mean().round(1)
+            media_resumo_minutos = df_resumo['Minutagem'].mean().round(0)
+            
+            linha_media = pd.DataFrame([{'Jogo': 'MÉDIA', metrica_grafico: media_resumo_metrica, 'Minutagem': media_resumo_minutos}])
+            df_resumo_final = pd.concat([df_resumo, linha_media], ignore_index=True)
+            
+            st.dataframe(df_resumo_final, width='stretch', hide_index=True)
+    else:
+        st.info("Não há dados suficientes para gerar a linha do tempo neste recorte.")
 
 # ----------------- ABA 2: COMPARATIVO -----------------
 with aba_comparativo:
@@ -232,7 +294,7 @@ with aba_clusters:
             top_3_display['Intensidade (%)'] = top_3_display['Intensidade (%)'].round(1).astype(str) + '%'
             top_3_display['V4 Dist'] = top_3_display['V4 Dist'].round(1)
             
-            st.dataframe(top_3_display, use_container_width=True, hide_index=True)
+            st.dataframe(top_3_display, width='stretch', hide_index=True)
     else:
         st.info("Dados insuficientes para calcular clusters de intensidade.")
 
