@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import warnings
+import plotly.express as px
 
 # Importações seguindo o padrão da arquitetura
 import Source.Dados.config as config
@@ -90,96 +91,113 @@ aba_timeline, aba_comparativo, aba_minutagem, aba_clusters, aba_insights = st.ta
 
 with aba_timeline:
     st.markdown("#### Evolução de performance por partida")
-    st.write(
-        "Use este bloco para mostrar a evolução do atleta em cada jogo (distância, HIA, Player Load, ações em alta intensidade etc.)."
-    )
-
+    
+    # Agrupa os dados por jogo para o atleta
+    cols_analise = ['Total Distance', 'Player Load', 'HIA']
+    df_evolucao = df_atleta_total.groupby(['Data', 'Data_Display'])[cols_analise].sum().reset_index().sort_values('Data')
+    
     col_a, col_b = st.columns([2, 1])
     with col_a:
-        st.markdown("**Linha do tempo (estrutura sugerida)**")
-        st.dataframe(
-            pd.DataFrame(
-                {
-                    "Jogo": df_atleta_total.sort_values('Data', ascending=False)['Data_Display'].drop_duplicates().head(8),
-                    "Status": "Pendente",
-                    "Observação": "Adicionar variação vs jogo anterior"
-                }
-            ),
-            use_container_width=True,
-            hide_index=True
+        metrica_grafico = st.selectbox("Selecione a Métrica:", cols_analise, key="metrica_timeline")
+        
+        # Gráfico Plotly
+        fig = px.line(
+            df_evolucao, 
+            x='Data_Display', 
+            y=metrica_grafico, 
+            markers=True,
+            title=f"Evolução: {metrica_grafico}"
         )
+        # Aplica o tema visual padronizado do projeto
+        fig.update_layout(visual.PLOTLY_TEMPLATE['layout'])
+        st.plotly_chart(fig, use_container_width=True)
+
     with col_b:
-        st.info("Sugestão: destacar recordes pessoais, tendência de melhora e sinais de queda de rendimento.")
+        st.markdown("**Resumo Histórico**")
+        df_resumo = df_evolucao[['Data_Display', metrica_grafico]].tail(5).sort_values('Data_Display', ascending=False)
+        st.dataframe(df_resumo, use_container_width=True, hide_index=True)
 
 with aba_comparativo:
-    st.markdown("#### Diferenças do jogo selecionado para outros jogos")
-    st.write("Estrutura para comparação direta contra 1 jogo de referência ou médias de blocos (últimos 3/5 jogos).")
-
-    opcoes_referencia = ["Último jogo", "Média últimos 3", "Média últimos 5", "Melhor jogo da temporada"]
-    st.selectbox("Base de comparação", opcoes_referencia, index=1)
-
-    st.dataframe(
-        pd.DataFrame(
-            {
-                "Métrica": ["Total Distance", "Player Load", "HIA", "V4 To8 Eff"],
-                "Jogo Atual": ["-", "-", "-", "-"],
-                "Referência": ["-", "-", "-", "-"],
-                "Diferença": ["-", "-", "-", "-"]
-            }
-        ),
-        use_container_width=True,
-        hide_index=True
-    )
+    st.markdown("#### Diferenças do jogo selecionado para a média")
+    
+    # Calcula as métricas do JOGO ATUAL
+    metricas_alvo = ["Total Distance", "Player Load", "HIA", "V5 To8 Eff"]
+    jogo_atual_stats = df_jogo_atleta[metricas_alvo].sum()
+    
+    # Calcula a MÉDIA HISTÓRICA por jogo
+    df_agrupado_hist = df_historico_atleta.groupby('Data')[metricas_alvo].sum()
+    media_historica = df_agrupado_hist.mean().fillna(0)
+    
+    # Monta o DataFrame de Comparação
+    df_comp = pd.DataFrame({
+        "Métrica": metricas_alvo,
+        "Jogo Atual": jogo_atual_stats.values.round(1),
+        "Média (Outros Jogos)": media_historica.values.round(1)
+    })
+    
+    df_comp['Diferença %'] = ((df_comp['Jogo Atual'] - df_comp['Média (Outros Jogos)']) / df_comp['Média (Outros Jogos)'] * 100).fillna(0)
+    
+    # Formatação visual
+    def formatar_cor(val):
+        cor = visual.CORES["ok_prontidao"] if val >= 0 else visual.CORES["alerta_fadiga"]
+        return f'<span style="color:{cor}; font-weight:bold;">{val:+.1f}%</span>'
+    
+    df_comp_display = df_comp.copy()
+    df_comp_display['Diferença %'] = df_comp_display['Diferença %'].apply(formatar_cor)
+    
+    st.write(df_comp_display.to_html(escape=False, index=False), unsafe_allow_html=True)
 
 with aba_minutagem:
-    st.markdown("#### Minutagem e distribuição por período")
-    st.write("Espaço para mostrar minutos jogados, consistência de participação e carga relativa por tempo.")
-
-    st.dataframe(
-        pd.DataFrame(
-            {
-                "Recorte": ["Jogo Atual", "Média Temporada", "Últimos 5 Jogos", "Pico de Minutagem"],
-                "Minutos": ["-", "-", "-", "-"],
-                "% 1º Tempo": ["-", "-", "-", "-"],
-                "% 2º Tempo": ["-", "-", "-", "-"]
-            }
-        ),
-        use_container_width=True,
-        hide_index=True
-    )
+    st.markdown("#### Minutagem e distribuição por período no jogo atual")
+    
+    if 'Min_Num' in df_jogo_atleta.columns and 'Período' in df_jogo_atleta.columns:
+        df_tempos = df_jogo_atleta.groupby('Período')['Min_Num'].sum().reset_index()
+        total_min_jogo = df_tempos['Min_Num'].sum()
+        
+        df_tempos['% do Total'] = (df_tempos['Min_Num'] / total_min_jogo * 100).round(1).astype(str) + "%"
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.dataframe(df_tempos.rename(columns={'Min_Num': 'Minutos Jogados'}), use_container_width=True, hide_index=True)
+        with col2:
+            st.info(f"**Minutagem Total neste jogo:** {total_min_jogo:.1f} minutos.")
+    else:
+        st.warning("Dados de Período ou Minutos (Min_Num) não disponíveis para esta análise.")
 
 with aba_clusters:
-    st.markdown("#### Clusters de velocidade e aceleração")
-    st.write("Área dedicada a segmentar ações por zonas de intensidade e perfil de aceleração/desaceleração.")
-
+    st.markdown("#### Ações por zonas de intensidade (Jogo Atual)")
+    
     cluster_cols = st.columns(3)
-    cluster_labels = ["Cluster 1 - Baixa Intensidade", "Cluster 2 - Moderada", "Cluster 3 - Alta Intensidade"]
+    
+    # Somando as variáveis do jogo selecionado
+    soma_jogo = df_jogo_atleta.sum(numeric_only=True)
+    
+    with cluster_cols[0]:
+        st.markdown("**🏃 Moderada (V4)**")
+        st.metric("Esforços V4", f"{int(soma_jogo.get('V4 To8 Eff', 0))}")
+        st.metric("Distância V4", f"{soma_jogo.get('V4 Dist', 0):.1f} m")
 
-    for i, label in enumerate(cluster_labels):
-        with cluster_cols[i]:
-            st.markdown(f"**{label}**")
-            st.caption("Definir ranges de velocidade/aceleração e listar volume de ações por jogo.")
+    with cluster_cols[1]:
+        st.markdown("**⚡ Alta/Sprints (V5+)**")
+        st.metric("Esforços V5+", f"{int(soma_jogo.get('V5 To8 Eff', 0) + soma_jogo.get('V6 To8 Eff', 0))}")
+        st.metric("Distância V5", f"{soma_jogo.get('V5 Dist', 0):.1f} m")
 
-    st.dataframe(
-        pd.DataFrame(
-            {
-                "Cluster": ["Baixa", "Moderada", "Alta"],
-                "Velocidade (km/h)": ["-", "-", "-"],
-                "Aceleração (m/s²)": ["-", "-", "-"],
-                "Ações no jogo": ["-", "-", "-"]
-            }
-        ),
-        use_container_width=True,
-        hide_index=True
-    )
+    with cluster_cols[2]:
+        st.markdown("**🛑 Mecânica (Acel/Dec)**")
+        st.metric("Acelerações (>3m/s²)", f"{int(soma_jogo.get('Acc3 Eff', 0))}")
+        st.metric("Desacelerações (<-3m/s²)", f"{int(soma_jogo.get('Dec3 Eff', 0))}")
 
 with aba_insights:
-    st.markdown("#### Sugestões de leitura técnica")
-    st.markdown(
-        """
-        - Comparar o jogo atual com a tendência dos últimos jogos para validar melhora real.
-        - Cruzar minutagem com métricas de alta intensidade para avaliar eficiência por minuto.
-        - Monitorar clusters de alta aceleração para ajustar carga e prevenção de risco.
-        - Enviar ao atleta um resumo pós-jogo com 3 pontos: evolução, diferença para referência e foco do próximo jogo.
-        """
-    )
+    st.markdown("#### 💡 Insights Automatizados do Jogo")
+    
+    hia_diff = df_comp[df_comp['Métrica'] == 'HIA']['Diferença %'].values[0]
+    dist_diff = df_comp[df_comp['Métrica'] == 'Total Distance']['Diferença %'].values[0]
+    
+    if hia_diff > 10:
+        st.success(f"📈 **Alta Intensidade Elevada:** O atleta teve um número de ações de alta intensidade (HIA) {hia_diff:.1f}% acima da sua média. Monitorar fadiga muscular nos próximos dias.")
+    elif hia_diff < -10:
+        st.warning(f"📉 **Queda de Intensidade:** O atleta realizou {abs(hia_diff):.1f}% menos ações intensas do que seu padrão normal.")
+    else:
+        st.info("⚖️ **Intensidade Padrão:** O HIA do atleta manteve-se na sua média histórica.")
+        
+    st.markdown(f"- O Volume Total (Distância) variou **{dist_diff:+.1f}%** em relação à média.")
