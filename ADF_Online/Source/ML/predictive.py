@@ -12,7 +12,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pickle
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GroupShuffleSplit
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import xgboost as xgb
 
@@ -137,19 +137,35 @@ for metric_target in MAPA_METRICAS.keys():
     for periodo in [1, 2]:
         print(f"\n  ⏱️  {periodo}º TEMPO:")
         
-        # O filtro agora aceita TODOS os snapshots gerados, sem eliminar ninguém por substituição!
+        # 1. Filtramos o período
         df_treino = df_snapshots[(df_snapshots['Período'] == periodo) & (df_snapshots['Min_Num'] > 0)].copy()
-        df_treino = df_treino[FEATURES_DA_METRICA + [alvo]].dropna()
+        
+        # 2. Mantemos Data e Name apenas temporariamente para formar os grupos
+        colunas_necessarias = FEATURES_DA_METRICA + [alvo, 'Data', 'Name']
+        df_treino = df_treino[colunas_necessarias].dropna()
         
         if len(df_treino) < 50:
             print(f"     ⚠️ Poucos dados ({len(df_treino)} linhas). Pulando...")
             continue
             
+        # 3. Separamos as Features (X) e o Alvo (y) SEM as colunas Data e Name
         X = df_treino[FEATURES_DA_METRICA]
         y = df_treino[alvo]
         
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=RANDOM_STATE)
+        # 4. CRUCIAL: Criamos um ID de grupo único para "Data + Atleta"
+        grupos = df_treino['Data'].astype(str) + "_" + df_treino['Name']
         
+        # 5. Split blindado contra Data Leakage (Agrupado por performance inteira)
+        gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=RANDOM_STATE)
+        
+        # Pega os índices gerados pelo gerador do GSS
+        train_idx, test_idx = next(gss.split(X, y, groups=grupos))
+        
+        # Aplica os índices para separar os dados de treino e teste finais
+        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+        
+        # Agora o modelo treina de forma justa!
         modelo = xgb.XGBRegressor(n_estimators=300, max_depth=5, learning_rate=0.05, random_state=RANDOM_STATE, verbosity=0)
         modelo.fit(X_train, y_train)
         y_pred = modelo.predict(X_test)

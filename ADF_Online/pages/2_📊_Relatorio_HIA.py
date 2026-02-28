@@ -3,163 +3,222 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objs as go
 import plotly.express as px
+import os
 import warnings
 
-# 1. Importações da Arquitetura
-import Source.Dados.config as config
 from Source.Dados.data_loader import obter_hora_modificacao, load_global_data
-from streamlit_autorefresh import st_autorefresh
+import Source.Dados.config as config
 import Source.UI.visual as visual
 import Source.UI.components as ui
 
-# 2. Configuração Visual
-st.set_page_config(page_title=f"Relatório HIA | {visual.CLUBE['sigla']}", layout="wide", initial_sidebar_state="collapsed")
+# =====================================================================
+# FUNÇÃO LOCAL: MINI CARDS PARA UMA ÚNICA LINHA PERFEITA
+# =====================================================================
+def renderizar_kpi_mini(titulo, valor, cor_borda=None, icone="📊", delta=None, delta_color="normal"):
+    """Gera um KPI compacto para caber perfeitamente na mesma linha."""
+    if cor_borda is None: cor_borda = visual.CORES.get("primaria", "#3B82F6")
+    
+    if delta is not None and str(delta).strip() != "" and str(delta).strip() != "None":
+        d_str = str(delta).strip()
+        is_neg = d_str.startswith("-") or "▼" in d_str
+        d_clean = d_str.replace("+", "").replace("-", "").replace("▼", "").replace("▲", "").strip()
+        
+        if delta_color == "normal":
+            c_d = visual.CORES["alerta_fadiga"] if is_neg else visual.CORES["ok_prontidao"]
+            seta = "▼" if is_neg else "▲"
+        elif delta_color == "inverse":
+            c_d = visual.CORES["ok_prontidao"] if is_neg else visual.CORES["alerta_fadiga"]
+            seta = "▼" if is_neg else "▲"
+        elif delta_color == "off":
+            c_d = visual.CORES["texto_claro"]
+            seta = "•"
+        else:
+            c_d = visual.CORES["texto_claro"]
+            seta = ""
+        html_delta = f"<div style='margin-top: 4px; font-size: 11px; font-weight: 700; color: {c_d};'>{seta} {d_clean}</div>"
+    else:
+        html_delta = f"<div style='margin-top: 4px; font-size: 11px; font-weight: 700; opacity: 0;'>&nbsp;</div>"
+
+    fundo = f"linear-gradient(135deg, {cor_borda}1A 0%, rgba(15, 23, 42, 0.7) 100%)"
+    
+    style_div = f"background: {fundo}; border-radius: 8px; padding: 12px 8px; border-left: 4px solid {cor_borda}; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; display: flex; flex-direction: column; justify-content: center; min-height: 85px; height: 100%; box-shadow: 0 4px 10px rgba(0,0,0,0.3);"
+    style_tit = f"color: {visual.CORES['texto_claro']}; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+    style_val = f"color: {visual.CORES['texto_escuro']}; font-size: 17px; font-weight: 800; line-height: 1.1; white-space: nowrap;"
+
+    html = f"""
+    <div style='{style_div}' title='{titulo}'>
+        <div style='{style_tit}'>{icone} {titulo}</div>
+        <div style='{style_val}'>{valor}</div>
+        {html_delta}
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
+
+
+# =====================================================================
+# INICIALIZAÇÃO DA PÁGINA
+# =====================================================================
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
-# CHAMA O NOVO MENU SUPERIOR (E o fundo padrão)
-ui.renderizar_menu_superior(pagina_atual="Relatório") # <-- Nome tem que ser igual ao que você botou lá no nav_items
-
-# 3. Cabeçalho Padronizado
-ui.renderizar_cabecalho("Timeline HIA", "Espectro de Intensidade e Ações V4+")
-
-st_autorefresh(interval=2000, limit=None, key="refresh_desta_pagina")
-hora_atual = obter_hora_modificacao(config.ARQUIVO_ORIGINAL)
-df_novo, df_recordes_novo = load_global_data(hora_atual)
-
-if not df_novo.empty:
-    st.session_state['df_global'] = df_novo
-    st.session_state['df_recordes'] = df_recordes_novo
-
 if 'df_global' not in st.session_state or st.session_state['df_global'].empty:
-    st.warning("⚠️ Carregue os dados na página principal ou verifique o arquivo Excel.")
+    st.warning("⚠️ Carregue os dados na página principal (Home) primeiro.")
     st.stop()
 
-# =====================================================================
-# RECUPERANDO DADOS GLOBAIS
-# =====================================================================
-df_completo = st.session_state['df_global'].copy()
-cols_componentes_hia = [c for c in config.COLS_COMPONENTES_HIA if c in df_completo.columns]
+df_cache_estatico = st.session_state['df_global']
+cols_componentes_hia_disp = [c for c in config.COLS_COMPONENTES_HIA if c in df_cache_estatico.columns]
 
 # =====================================================================
-# 3. FILTROS: HIERARQUIA DE FUNIL (COMPETIÇÃO -> JOGO -> ATLETA)
+# LAYOUT PRINCIPAL: 30% ESQUERDA (FILTROS) | 70% DIREITA (PAINEL)
 # =====================================================================
-st.markdown("### 🔍 Configuração do Perfil")
-with st.container():
+col_esq, col_dir = st.columns([0.28, 0.72], gap="medium")
+
+with col_esq:
+    st.markdown("### 🔍 Configuração do Perfil")
     
-    # --- LINHA 1: COMPETIÇÃO E JOGO ---
-    col1, col2 = st.columns([1.5, 2.5])
+    # 1. Campeonato e Jogo Lado a Lado
+    c_camp, c_jogo = st.columns(2)
     
-    lista_competicoes = sorted(df_completo['Competição'].dropna().unique().tolist()) if 'Competição' in df_completo.columns else []
-    with col1:
-        competicoes_selecionadas = st.multiselect("🏆 Competições:", options=lista_competicoes, default=[])
+    lista_campeonatos = sorted(df_cache_estatico['Competição'].dropna().unique().tolist()) if 'Competição' in df_cache_estatico.columns else []
+    with c_camp:
+        campeonatos_selecionados = st.multiselect("🏆 Competições:", options=lista_campeonatos, default=[])
         
-    df_base = df_completo[df_completo['Competição'].isin(competicoes_selecionadas)] if competicoes_selecionadas else df_completo.copy()
-    lista_jogos_display = df_base.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)['Data_Display'].tolist()
+    df_base_estatico = df_cache_estatico[df_cache_estatico['Competição'].isin(campeonatos_selecionados)] if campeonatos_selecionados else df_cache_estatico.copy()
+    lista_jogos_display = df_base_estatico.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)['Data_Display'].tolist()
     
-    with col2: 
+    with c_jogo: 
         jogo_selecionado_display = st.selectbox("📅 Selecione o Jogo:", lista_jogos_display)
         
     if not jogo_selecionado_display: 
         st.warning("Nenhum dado encontrado.")
         st.stop()
         
-    jogo_selecionado = df_base[df_base['Data_Display'] == jogo_selecionado_display]['Data'].iloc[0]
-    df_jogo_filtrado = df_base[df_base['Data'] == jogo_selecionado].copy()
+    jogo_selecionado = df_base_estatico[df_base_estatico['Data_Display'] == jogo_selecionado_display]['Data'].iloc[0]
+    df_jogo_filtrado = df_base_estatico[df_base_estatico['Data'] == jogo_selecionado].copy()
 
-    # --- LINHA 2: ESCOLHA DO ATLETA (PILLS) ---
+    # 2. Período
+    st.markdown("<br>", unsafe_allow_html=True)
+    periodo_texto = st.radio("⏱️ Período de Análise:", ["1º Tempo", "2º Tempo"], horizontal=True)
+    periodo_sel = 1 if periodo_texto == "1º Tempo" else 2
+
+    # 3. Seleção de Atletas (Pills)
     st.markdown("<br>", unsafe_allow_html=True)
     lista_atletas = sorted(df_jogo_filtrado['Name'].dropna().unique())
-    
     atleta_selecionado = st.pills("🏃 Selecione o Atleta para Foco Individual:", lista_atletas, default=lista_atletas[0] if lista_atletas else None)
 
     if not atleta_selecionado:
         st.warning("Por favor, selecione um atleta para continuar.")
         st.stop()
 
-# Datasets finais para os gráficos
-df_atleta_jogo = df_jogo_filtrado[df_jogo_filtrado['Name'] == atleta_selecionado].copy()
-df_equipa_jogo = df_jogo_filtrado.copy()
-
 # =====================================================================
-# 4. MOTOR DO GRÁFICO EMPILHADO (STACKED BAR CHART) COM ABAS
+# ÁREA DIREITA: FRAGMENTO DE ATUALIZAÇÃO (GRÁFICO EMPILHADO + KPIS)
 # =====================================================================
-st.markdown("<br>", unsafe_allow_html=True)
-aba_t1, aba_t2 = st.tabs(["⏱️ 1º Tempo", "⏱️ 2º Tempo"])
-mapa_abas = {1: aba_t1, 2: aba_t2}
+with col_dir:
+    st.markdown(f"### ⏱️ Espectro de Intensidade: {atleta_selecionado} ({periodo_sel}º Tempo)")
 
-for periodo in [1, 2]:
-    with mapa_abas[periodo]:
-        st.markdown(f"### ⏱️ Espectro de Intensidade: {atleta_selecionado} ({periodo}º Tempo)")
+    @st.fragment(run_every="5s")
+    def painel_hia_ao_vivo(campeonatos, jogo_alvo, atleta, periodo):
+        """Atualiza o gráfico de HIA dinamicamente em tempo real."""
+        hora_atual = obter_hora_modificacao(config.ARQUIVO_ORIGINAL)
+        df_fresco, df_rec_fresco = load_global_data(hora_atual)
+        
+        if df_fresco.empty:
+            df_fresco = st.session_state['df_global']
+        else:
+            st.session_state['df_global'] = df_fresco
+            st.session_state['df_recordes'] = df_rec_fresco
+
+        df_base = df_fresco[df_fresco['Competição'].isin(campeonatos)] if campeonatos else df_fresco
+        df_equipa_jogo = df_base[df_base['Data'] == jogo_alvo].copy()
+        df_atleta_jogo = df_equipa_jogo[df_equipa_jogo['Name'] == atleta].copy()
+        
+        cols_componentes_hia = [c for c in config.COLS_COMPONENTES_HIA if c in df_equipa_jogo.columns]
+        
         df_periodo = df_atleta_jogo[df_atleta_jogo['Período'] == periodo].copy()
 
-        if not df_periodo.empty and cols_componentes_hia:
-            # Agrupa os componentes do atleta
-            df_minutos_components = df_periodo.groupby('Interval')[cols_componentes_hia].sum().reset_index()
-            minuto_maximo = int(df_minutos_components['Interval'].max())
-            todos_minutos = pd.DataFrame({'Interval': range(1, minuto_maximo + 1)})
-            df_timeline_full = pd.merge(todos_minutos, df_minutos_components, on='Interval', how='left').fillna(0)
-            df_timeline_full['Total_HIA_Min'] = df_timeline_full[cols_componentes_hia].sum(axis=1)
-            
-            # Cálculos da Média da Equipa
-            df_equipa_periodo = df_equipa_jogo[df_equipa_jogo['Período'] == periodo].copy()
-            
-            if not df_equipa_periodo.empty:
-                df_equipa_periodo['Total_HIA'] = df_equipa_periodo[cols_componentes_hia].sum(axis=1)
-                hia_por_jogador = df_equipa_periodo.groupby('Name')['Total_HIA'].sum()
-                hia_por_jogador = hia_por_jogador[hia_por_jogador > 0]
-                media_hia_equipe = hia_por_jogador.mean() if not hia_por_jogador.empty else 0
-                
-                hia_jogador_minuto = df_equipa_periodo.groupby(['Interval', 'Name'])['Total_HIA'].sum().reset_index()
-                media_grupo_minuto = hia_jogador_minuto.groupby('Interval')['Total_HIA'].mean().reset_index()
-            else:
-                media_hia_equipe = 0
-                media_grupo_minuto = pd.DataFrame(columns=['Interval', 'Total_HIA'])
-
-            # Lógica KPIs do Atleta
-            df_timeline_full['Zero_Block'] = (df_timeline_full['Total_HIA_Min'] > 0).cumsum()
-            sequencias_zeros = df_timeline_full[df_timeline_full['Total_HIA_Min'] == 0].groupby('Zero_Block').size()
-            maior_gap_descanso = sequencias_zeros.max() if not sequencias_zeros.empty else 0
-            
-            total_hia_periodo = df_timeline_full['Total_HIA_Min'].sum()
-            densidade = total_hia_periodo / minuto_maximo if minuto_maximo > 0 else 0
-            delta_vs_equipe = ((total_hia_periodo / media_hia_equipe) - 1) * 100 if media_hia_equipe > 0 else 0.0
-
-            # Renderização dos Cartões Customizados
-            k1, k2, k3, k4, k5 = st.columns(5)
-            
-            with k1: ui.renderizar_card_kpi("Minutos Jogados", f"{minuto_maximo}m", icone="⏱️")
-            with k2: ui.renderizar_card_kpi("HIA Total", f"{total_hia_periodo:.2f}", cor_borda=visual.CORES["alerta_fadiga"], icone="⚡")
-            with k3: ui.renderizar_card_kpi("Média da Equipe", f"{media_hia_equipe:.2f}", delta=f"{delta_vs_equipe:+.2f}% vs Equipe", delta_color="normal", icone="👥")
-            with k4: ui.renderizar_card_kpi("Densidade", f"{densidade:.2f}", icone="📊")
-            with k5: ui.renderizar_card_kpi("Tempo s/ Estímulo", f"{maior_gap_descanso}m", delta="Recuperação", delta_color="off", cor_borda=visual.CORES["ok_prontidao"], icone="🔋")
-                
-            # Gráfico Empilhado
-            df_melted = df_timeline_full.melt(id_vars=['Interval'], value_vars=cols_componentes_hia, var_name='Tipo de Esforço', value_name='Qtd Ações')
-            df_melted = df_melted[df_melted['Qtd Ações'] > 0]
-
-            CORES_DARK_HIA = {
-                'V4 To8 Eff': '#FDE68A', 'V5 To8 Eff': '#F59E0B', 'V6 To8 Eff': '#EF4444', 
-                'Acc3 Eff': '#60A5FA', 'Dec3 Eff': '#10B981', 'Acc4 Eff': '#3B82F6', 'Dec4 Eff': '#059669',
-            }
-
-            fig = px.bar(df_melted, x='Interval', y='Qtd Ações', color='Tipo de Esforço', color_discrete_map=CORES_DARK_HIA, title=None)
-
-            if not media_grupo_minuto.empty:
-                fig.add_trace(go.Scatter(
-                    x=media_grupo_minuto['Interval'], y=media_grupo_minuto['Total_HIA'], mode='lines',
-                    name='Média da Equipe', line=dict(color='#F8FAFC', width=2, dash='dot'), hovertemplate='Média Equipe: %{y:.2f} ações<extra></extra>' 
-                ))
-
-            fig.update_layout(
-                template='plotly_dark', plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', height=350, margin=dict(l=20, r=20, t=10, b=20),
-                hovermode='x unified', bargap=0.15, 
-                xaxis=dict(tickmode='linear', dtick=5, range=[0, minuto_maximo + 1], title="Minuto de Jogo", gridcolor='#334155'),
-                yaxis=dict(title="Qtd. Ações HIA", gridcolor='#334155'),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=None)
-            )
-            fig.update_traces(hovertemplate='%{y:.2f} ações', selector=dict(type='bar'))
-
-            st.plotly_chart(fig, width='stretch', key=f"hia_stacked_{periodo}")
-            
-        else:
+        if df_periodo.empty or not cols_componentes_hia:
             st.info(f"Nenhum dado de alta intensidade encontrado para o {periodo}º Tempo deste atleta.")
+            return
+
+        # =====================================================================
+        # LÓGICA DE PROCESSAMENTO E AGREGAÇÃO DO HIA
+        # =====================================================================
+        df_minutos_components = df_periodo.groupby('Interval')[cols_componentes_hia].sum().reset_index()
+        minuto_maximo = int(df_minutos_components['Interval'].max())
+        todos_minutos = pd.DataFrame({'Interval': range(1, minuto_maximo + 1)})
+        df_timeline_full = pd.merge(todos_minutos, df_minutos_components, on='Interval', how='left').fillna(0)
+        df_timeline_full['Total_HIA_Min'] = df_timeline_full[cols_componentes_hia].sum(axis=1)
+        
+        # Cálculos da Média da Equipa
+        df_equipa_periodo = df_equipa_jogo[df_equipa_jogo['Período'] == periodo].copy()
+        
+        if not df_equipa_periodo.empty:
+            df_equipa_periodo['Total_HIA'] = df_equipa_periodo[cols_componentes_hia].sum(axis=1)
+            hia_por_jogador = df_equipa_periodo.groupby('Name')['Total_HIA'].sum()
+            hia_por_jogador = hia_por_jogador[hia_por_jogador > 0]
+            media_hia_equipe = hia_por_jogador.mean() if not hia_por_jogador.empty else 0
+            
+            hia_jogador_minuto = df_equipa_periodo.groupby(['Interval', 'Name'])['Total_HIA'].sum().reset_index()
+            media_grupo_minuto = hia_jogador_minuto.groupby('Interval')['Total_HIA'].mean().reset_index()
+        else:
+            media_hia_equipe = 0
+            media_grupo_minuto = pd.DataFrame(columns=['Interval', 'Total_HIA'])
+
+        # Cálculos Avançados do Atleta (Gaps e Densidade)
+        df_timeline_full['Zero_Block'] = (df_timeline_full['Total_HIA_Min'] > 0).cumsum()
+        sequencias_zeros = df_timeline_full[df_timeline_full['Total_HIA_Min'] == 0].groupby('Zero_Block').size()
+        maior_gap_descanso = sequencias_zeros.max() if not sequencias_zeros.empty else 0
+        
+        total_hia_periodo = df_timeline_full['Total_HIA_Min'].sum()
+        densidade = total_hia_periodo / minuto_maximo if minuto_maximo > 0 else 0
+        delta_vs_equipe = ((total_hia_periodo / media_hia_equipe) - 1) * 100 if media_hia_equipe > 0 else 0.0
+
+        # =====================================================================
+        # GRÁFICO PLOTLY EMPILHADO
+        # =====================================================================
+        df_melted = df_timeline_full.melt(id_vars=['Interval'], value_vars=cols_componentes_hia, var_name='Tipo de Esforço', value_name='Qtd Ações')
+        df_melted = df_melted[df_melted['Qtd Ações'] > 0]
+
+        CORES_DARK_HIA = {
+            'V4 To8 Eff': '#FDE68A', 'V5 To8 Eff': '#F59E0B', 'V6 To8 Eff': '#EF4444', 
+            'Acc3 Eff': '#60A5FA', 'Dec3 Eff': '#10B981', 'Acc4 Eff': '#3B82F6', 'Dec4 Eff': '#059669',
+        }
+
+        fig = px.bar(df_melted, x='Interval', y='Qtd Ações', color='Tipo de Esforço', color_discrete_map=CORES_DARK_HIA, title=None)
+
+        if not media_grupo_minuto.empty:
+            fig.add_trace(go.Scatter(
+                x=media_grupo_minuto['Interval'], y=media_grupo_minuto['Total_HIA'], mode='lines',
+                name='Média da Equipe', line=dict(color='#F8FAFC', width=2, dash='dot'), hovertemplate='Média Equipe: %{y:.2f} ações<extra></extra>' 
+            ))
+
+        fig.update_layout(
+            template='plotly_dark', plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', 
+            height=450, margin=dict(l=20, r=20, t=10, b=20),
+            hovermode='x unified', bargap=0.15, 
+            xaxis=dict(tickmode='linear', dtick=5, range=[0, minuto_maximo + 1], title="Minutos de Jogo", gridcolor='#334155'),
+            yaxis=dict(title="Qtd. Ações HIA", gridcolor='#334155'),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=None)
+        )
+        fig.update_traces(hovertemplate='%{y:.2f} ações', selector=dict(type='bar'))
+
+        st.plotly_chart(fig, use_container_width=True, key=f"hia_stacked_{periodo}_{atleta}")
+        
+        # =====================================================================
+        # 5 MINIS KPIs EM UMA ÚNICA LINHA ABAIXO DO GRÁFICO
+        # =====================================================================
+        st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
+        k1, k2, k3, k4, k5 = st.columns(5, gap="small")
+        
+        with k1: renderizar_kpi_mini("Minutos", f"{minuto_maximo}m", icone="⏱️")
+        with k2: renderizar_kpi_mini("HIA Total", f"{total_hia_periodo:.0f}", cor_borda=visual.CORES["alerta_fadiga"], icone="⚡")
+        with k3: renderizar_kpi_mini("Equipe", f"{media_hia_equipe:.1f}", delta=f"{delta_vs_equipe:+.1f}% vs Equipe", delta_color="normal", icone="👥")
+        with k4: renderizar_kpi_mini("Densidade", f"{densidade:.2f}", icone="📊")
+        with k5: renderizar_kpi_mini("S/ Estímulo", f"{maior_gap_descanso}m", delta="Recuperação", delta_color="off", cor_borda=visual.CORES["ok_prontidao"], icone="🔋")
+
+    # Inicia o bloco fragmentado
+    painel_hia_ao_vivo(
+        campeonatos_selecionados, 
+        jogo_selecionado, 
+        atleta_selecionado,
+        periodo_sel
+    )

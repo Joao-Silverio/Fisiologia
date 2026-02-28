@@ -1,6 +1,8 @@
 import streamlit as st
 from PIL import Image
 import Source.UI.visual as visual
+from Source.Dados.data_loader import load_global_data, obter_hora_modificacao
+import Source.Dados.config as config
 
 def renderizar_cabecalho(titulo, subtitulo):
     """Gera um cabeçalho padrão e injeta CSS para subir o conteúdo da página."""
@@ -178,3 +180,34 @@ def renderizar_menu_superior(pagina_atual="Home"):
                 ):
                     if not is_active:
                         st.switch_page(caminho_pagina)
+
+# O "run_every" faz apenas este bloco de código rodar a cada 5 segundos
+@st.fragment(run_every="5s")
+def renderizar_painel_ao_vivo(df_original, pagina_atual):
+    """
+    Componente inteligente anti-flicker. 
+    Ele busca ativamente dados novos sem recarregar os filtros laterais ou menus.
+    """
+    hora_atual = obter_hora_modificacao(config.ARQUIVO_ORIGINAL)
+    df_novo, df_recordes_novo = load_global_data(hora_atual)
+    
+    # Atualizamos as métricas de sessão de forma invisível
+    if not df_novo.empty:
+        st.session_state['df_global'] = df_novo
+        st.session_state['df_recordes'] = df_recordes_novo
+    
+    # Agora pegamos os dados mais frescos
+    df_ativo = st.session_state.get('df_global', df_original)
+    
+    # Exemplo: Renderizando os KPI's centrais da página
+    st.markdown(f"*(Última atualização silenciosa: {pd.Timestamp.now().strftime('%H:%M:%S')})*")
+    
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric("Total de Linhas Lidas", len(df_ativo))
+    with c2:
+        media_hia = df_ativo['HIA'].mean() if 'HIA' in df_ativo.columns else 0
+        st.metric("HIA Médio da Equipe", f"{media_hia:.1f}")
+    with c3:
+        if 'Placar' in df_ativo.columns:
+            st.metric("Placar Atualizado", str(df_ativo['Placar'].iloc[-1]))

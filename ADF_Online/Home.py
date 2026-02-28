@@ -10,15 +10,6 @@ import Source.UI.components as ui
 import Source.UI.visual as visual
 
 # --------------------------------------------------
-# PAGE CONFIG
-# --------------------------------------------------
-st.set_page_config(
-    page_title=f"Sports Hub | {visual.CLUBE['sigla']}",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
-
-# --------------------------------------------------
 # GLOBAL CSS (Apenas para o Hero Banner, adaptado às cores do clube)
 # --------------------------------------------------
 st.markdown(f"""
@@ -69,9 +60,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # --------------------------------------------------
-# MENU SUPERIOR E CABEÇALHO PADRÃO
-# --------------------------------------------------
-ui.renderizar_menu_superior(pagina_atual="Home")
+# CABEÇALHO PADRÃO
 
 ui.renderizar_cabecalho(
     "Sports Performance Hub",
