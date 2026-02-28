@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import warnings
 import plotly.express as px
+import plotly.graph_objects as go
 
 # Importações seguindo o padrão da arquitetura
 import Source.Dados.config as config
@@ -80,15 +81,13 @@ st.markdown(f"#### 👤 Painel Individual: {atleta_selecionado} | Jogo {jogo_des
 
 total_jogos = df_atleta_total['Data'].nunique()
 
-# NOVA LÓGICA DE MINUTAGEM: Pega o valor máximo (último número) de cada período jogado
+# LÓGICA DE MINUTAGEM: Pega o valor máximo de cada período jogado
 if 'Min_Num' in df_jogo_atleta.columns and not df_jogo_atleta.empty:
-    # Agrupa por período e pega o máximo, depois soma (se for o jogo completo, soma T1+T2)
     total_minutos = df_jogo_atleta.groupby('Período')['Min_Num'].max().sum()
 else:
     total_minutos = 0
 
 if 'Min_Num' in df_atleta_total.columns and total_jogos > 0:
-    # Para a média histórica: descobre os minutos de cada jogo (somando os máx de cada período) e tira a média
     minutos_por_jogo = df_atleta_total.groupby(['Data', 'Período'])['Min_Num'].max().groupby('Data').sum()
     media_minutos = minutos_por_jogo.mean()
 else:
@@ -119,29 +118,74 @@ aba_timeline, aba_comparativo, aba_clusters, aba_insights = st.tabs([
 with aba_timeline:
     st.markdown("#### Evolução de performance por partida")
     
-    cols_analise = ['Total Distance', 'Player Load', 'HIA']
-    # Agrupa os dados por jogo para construir a linha do tempo do período selecionado
-    df_evolucao = df_atleta_total.groupby(['Data', 'Data_Display'])[cols_analise].sum().reset_index().sort_values('Data')
+    cols_analise = ['Total Distance', 'Player Load', 'HIA', 'V4 Dist', 'V5 Dist']
+    
+    # 1. Agrupa as métricas de performance por jogo
+    df_metricas_timeline = df_atleta_total.groupby(['Data', 'Data_Display'])[cols_analise].sum().reset_index()
+    
+    # 2. Calcula a minutagem correta POR JOGO para colocar no gráfico
+    if 'Min_Num' in df_atleta_total.columns:
+        df_minutos_timeline = df_atleta_total.groupby(['Data', 'Data_Display', 'Período'])['Min_Num'].max().groupby(['Data', 'Data_Display']).sum().reset_index(name='Minutagem')
+    else:
+        df_minutos_timeline = pd.DataFrame({'Data': df_metricas_timeline['Data'], 'Data_Display': df_metricas_timeline['Data_Display'], 'Minutagem': 0})
+        
+    # 3. Junta tudo em um dataframe só
+    df_evolucao = pd.merge(df_metricas_timeline, df_minutos_timeline, on=['Data', 'Data_Display']).sort_values('Data')
     
     if not df_evolucao.empty:
         col_a, col_b = st.columns([2, 1])
         with col_a:
             metrica_grafico = st.selectbox("Selecione a Métrica:", cols_analise, key="metrica_timeline")
             
-            fig = px.line(
-                df_evolucao, 
-                x='Data_Display', 
-                y=metrica_grafico, 
-                markers=True,
-                title=f"Evolução: {metrica_grafico} ({periodo_selecionado})"
+            # Cálculo da média da métrica selecionada
+            media_metrica = df_evolucao[metrica_grafico].mean()
+            
+            # Define as cores das bolinhas (Verde se >= Média, Vermelho se < Média)
+            cores_marcadores = [
+                visual.CORES["ok_prontidao"] if val >= media_metrica else visual.CORES["alerta_fadiga"] 
+                for val in df_evolucao[metrica_grafico]
+            ]
+            
+            # Construção do gráfico customizado
+            fig = go.Figure()
+            
+            fig.add_trace(go.Scatter(
+                x=df_evolucao['Data_Display'],
+                y=df_evolucao[metrica_grafico],
+                mode='lines+markers',
+                name=metrica_grafico,
+                line=dict(color=visual.CORES["secundaria"], width=2),
+                marker=dict(size=12, color=cores_marcadores, line=dict(width=1, color=visual.CORES["fundo_card"])),
+                customdata=df_evolucao[['Minutagem']],
+                hovertemplate="<b>Jogo:</b> %{x}<br>" +
+                              "<b>Valor:</b> %{y:.1f}<br>" +
+                              "<b>Minutagem:</b> %{customdata[0]:.0f} min<extra></extra>"
+            ))
+            
+            # Adiciona a linha pontilhada da média
+            fig.add_hline(
+                y=media_metrica, 
+                line_dash="dash", 
+                line_color=visual.CORES["texto_claro"],
+                annotation_text=f"Média: {media_metrica:.1f}", 
+                annotation_position="top left",
+                annotation_font_color=visual.CORES["texto_claro"]
             )
-            fig.update_layout(visual.PLOTLY_TEMPLATE['layout'])
+            
+            # Aplica o layout escuro e título
+            fig.update_layout(
+                title=f"Evolução: {metrica_grafico} ({periodo_selecionado})",
+                **visual.PLOTLY_TEMPLATE['layout']
+            )
+            
             st.plotly_chart(fig, use_container_width=True)
 
         with col_b:
             st.markdown("**Resumo (Últimos 5 jogos)**")
-            df_resumo = df_evolucao[['Data_Display', metrica_grafico]].tail(5).sort_values('Data_Display', ascending=False)
+            df_resumo = df_evolucao[['Data_Display', metrica_grafico, 'Minutagem']].tail(5).sort_values('Data_Display', ascending=False)
             df_resumo.rename(columns={'Data_Display': 'Jogo'}, inplace=True)
+            # Arredonda a métrica para visualização na tabela
+            df_resumo[metrica_grafico] = df_resumo[metrica_grafico].round(1)
             st.dataframe(df_resumo, use_container_width=True, hide_index=True)
     else:
         st.info("Não há dados suficientes para gerar a linha do tempo neste recorte.")
@@ -150,7 +194,8 @@ with aba_timeline:
 with aba_comparativo:
     st.markdown("#### Diferenças do jogo selecionado para a sua média histórica")
     
-    metricas_alvo = ["Total Distance", "Player Load", "HIA", "V5 To8 Eff"]
+    # ADICIONADO: V4 Dist e V5 Dist
+    metricas_alvo = ["Total Distance", "Player Load", "HIA", "V5 To8 Eff", "V4 Dist", "V5 Dist"]
     
     if not df_jogo_atleta.empty and not df_historico_atleta.empty:
         # Jogo Atual
