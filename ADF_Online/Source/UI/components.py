@@ -73,82 +73,76 @@ def renderizar_card_kpi(titulo, valor, cor_borda=None, icone="📊", delta=None,
     """
     st.markdown(html, unsafe_allow_html=True)
 
-
 def renderizar_menu_superior(pagina_atual="Home"):
-    """
-    Renderiza o menu superior com CSS simplificado e robusto.
-    """
-    # 1. CSS Global e Ocultação da Sidebar
     st.markdown(
         f"""
         <style>
-            /* Fundo da tela principal */
+            /* 1. Cores de fundo */
             .stApp {{
                 background:
                     radial-gradient(circle at top right, {visual.CORES.get('primaria', '#FDFD96')}20 0%, transparent 35%),
                     radial-gradient(circle at bottom left, {visual.CORES.get('secundaria', '#60A5FA')}22 0%, transparent 40%);
             }}
-            .block-container {{ padding-top: 1.1rem !important; }}
             
-            /* Ocultar a sidebar nativa do Streamlit */
+            /* 2. Ocultar o menu lateral nativo */
             [data-testid="stSidebarNav"], [data-testid="stSidebar"], [data-testid="collapsedControl"] {{ 
                 display: none !important; 
             }}
             
-            /* Estilos específicos para a caixa do menu (stHorizontalBlock) na parte SUPERIOR da página */
-            /* Isso garante que afete as primeiras colunas renderizadas */
-            .main .block-container > div:first-child [data-testid="stHorizontalBlock"] {{
-                background: rgba(15, 23, 42, 0.85) !important;
-                border: 1px solid #334155 !important; 
-                border-radius: 14px !important;
-                padding: 10px !important; 
-                backdrop-filter: blur(10px) !important; 
-                margin-bottom: 1.5rem !important;
-                position: sticky !important;
-                top: 0.5rem !important;
-                z-index: 9999 !important;
-            }}
-
-            /* --- ESTILIZAÇÃO GLOBAL DOS BOTÕES --- */
-            /* BOTÃO ATIVO (Primary) */
-            button[data-testid="baseButton-primary"] {{
-                background-color: #FFFFFF !important;
-                border: 1px solid #FFFFFF !important;
-                border-radius: 10px !important;
-                box-shadow: 0 4px 15px rgba(255, 255, 255, 0.25) !important;
-                min-height: 42px !important;
+            /* 3. Ajuste do topo da página para dar espaço ao menu */
+            .block-container {{ 
+                padding-top: 4rem !important; /* Mais espaço no topo para o menu não bater no header nativo */
             }}
             
-            button[data-testid="baseButton-primary"] * {{
+            /* 4. Esconder ou afastar o header padrão do Streamlit (onde ficam os 3 pontinhos) */
+            header[data-testid="stHeader"] {{
+                background: transparent !important;
+                height: 0px !important;
+            }}
+
+            /* 5. A mágica para capturar a primeira linha de colunas da página (Nosso Menu) */
+            div[data-testid="stVerticalBlock"] > div:first-child [data-testid="stHorizontalBlock"] {{
+                background: rgba(15, 23, 42, 0.90) !important;
+                border: 1px solid #334155 !important; 
+                border-radius: 12px !important;
+                padding: 12px !important; 
+                backdrop-filter: blur(12px) !important; 
+                margin-bottom: 2rem !important;
+                
+                /* Mantém o menu preso no topo, mas abaixo da linha de perigo do header */
+                position: sticky !important;
+                top: 1rem !important;
+                z-index: 999999 !important; 
+                box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+            }}
+
+            /* 6. ESTILO DOS BOTÕES DO MENU */
+            [data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {{
+                background-color: #FFFFFF !important;
+                border: 1px solid #FFFFFF !important;
+                border-radius: 8px !important;
+                min-height: 45px !important;
+            }}
+            [data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] * {{
                 color: #000000 !important;
                 font-weight: 800 !important;
             }}
 
-            button[data-testid="baseButton-primary"]:hover {{
-                background-color: #E2E8F0 !important; 
-                border-color: #E2E8F0 !important;
-            }}
-
-            /* BOTÕES INATIVOS (Secondary) */
-            button[data-testid="baseButton-secondary"] {{
+            [data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"] {{
                 background-color: transparent !important;
                 border: 1px solid #334155 !important;
-                border-radius: 10px !important;
-                min-height: 42px !important;
+                border-radius: 8px !important;
+                min-height: 45px !important;
             }}
-            
-            button[data-testid="baseButton-secondary"] p,
-            button[data-testid="baseButton-secondary"] span {{
+            [data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"] p {{
                 color: {visual.CORES.get('texto_claro', '#94A3B8')} !important;
-                font-weight: 500 !important;
+                font-weight: 600 !important;
             }}
-
-            button[data-testid="baseButton-secondary"]:hover {{
+            [data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"]:hover {{
                 border-color: {visual.CORES.get('secundaria', '#60A5FA')} !important;
                 background-color: rgba(96, 165, 250, 0.1) !important;
             }}
-            button[data-testid="baseButton-secondary"]:hover p,
-            button[data-testid="baseButton-secondary"]:hover span {{
+            [data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"]:hover p {{
                 color: #FFFFFF !important;
             }}
         </style>
@@ -156,7 +150,6 @@ def renderizar_menu_superior(pagina_atual="Home"):
         unsafe_allow_html=True,
     )
 
-    # 2. Estrutura dos caminhos com ÍCONES MATERIAL DESIGN
     nav_items = [
         ("Home.py", "Home", ":material/home:"),
         ("pages/1_🔴_Live_Tracker.py", "Live", ":material/sensors:"),
@@ -167,22 +160,20 @@ def renderizar_menu_superior(pagina_atual="Home"):
         ("pages/6_👤_Individual_Atleta.py", "Atleta", ":material/person:"),
     ]
 
-    # 3. Renderização dos Botões
-    # Cria um container específico para o menu
-    menu_container = st.container()
-    
-    with menu_container:
+    # Usamos container para garantir que a injeção do CSS pegue exatamente esse bloco
+    with st.container():
         cols = st.columns(len(nav_items))
         
         for col, (caminho_pagina, label, icon) in zip(cols, nav_items):
             with col:
                 is_active = label.lower() in pagina_atual.lower()
                 
-                # Utiliza width="stretch" conforme documentação mais recente
+                # use_container_width é o padrão ouro moderno do Streamlit. 
+                # Se falhar localmente, é urgência máxima atualizar seu Streamlit local.
                 if st.button(
                     f"{icon} {label}",
                     key=f"nav_top_{label}",
-                    width="stretch",
+                    width='stretch', 
                     type="primary" if is_active else "secondary",
                 ):
                     if not is_active:
