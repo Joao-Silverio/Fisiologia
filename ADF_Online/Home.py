@@ -220,8 +220,11 @@ try:
                     )
                     # Aplica as cores padrão definidas no seu visual.py
                     fig.update_traces(marker_color=visual.CORES["secundaria"])
+                    # 1. Aplica o template base primeiro
+                    fig.update_layout(**visual.PLOTLY_TEMPLATE['layout'])
+                    
+                    # 2. Sobrescreve apenas os atributos específicos deste gráfico
                     fig.update_layout(
-                        **visual.PLOTLY_TEMPLATE['layout'],
                         height=320,
                         margin=dict(l=0, r=0, t=20, b=0),
                         xaxis_title="",
