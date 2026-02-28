@@ -195,7 +195,7 @@ try:
 
                 st.dataframe(
                     ranking_hia.rename(columns={"Name": "Atleta", "HIA": "HIA Acumulado"}),
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True
                 )
             else:
