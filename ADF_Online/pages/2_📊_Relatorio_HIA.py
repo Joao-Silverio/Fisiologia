@@ -13,8 +13,11 @@ import Source.UI.visual as visual
 import Source.UI.components as ui
 
 # 2. Configuração Visual
-st.set_page_config(page_title=f"Relatório HIA | {visual.CLUBE['sigla']}", layout="wide")
+st.set_page_config(page_title=f"Relatório HIA | {visual.CLUBE['sigla']}", layout="wide", initial_sidebar_state="collapsed")
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
+
+# CHAMA O NOVO MENU SUPERIOR (E o fundo padrão)
+ui.renderizar_menu_superior(pagina_atual="Relatório") # <-- Nome tem que ser igual ao que você botou lá no nav_items
 
 # 3. Cabeçalho Padronizado
 ui.renderizar_cabecalho("Timeline HIA", "Espectro de Intensidade e Ações V4+")
@@ -156,7 +159,7 @@ for periodo in [1, 2]:
             )
             fig.update_traces(hovertemplate='%{y:.2f} ações', selector=dict(type='bar'))
 
-            st.plotly_chart(fig, use_container_width=True, key=f"hia_stacked_{periodo}")
+            st.plotly_chart(fig, width='stretch', key=f"hia_stacked_{periodo}")
             
         else:
             st.info(f"Nenhum dado de alta intensidade encontrado para o {periodo}º Tempo deste atleta.")

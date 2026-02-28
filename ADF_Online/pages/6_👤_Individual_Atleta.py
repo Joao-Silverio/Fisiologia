@@ -13,8 +13,11 @@ import Source.UI.visual as visual
 import Source.UI.components as ui
 
 # Configuração de Página
-st.set_page_config(page_title=f"Raio-X Individual | {visual.CLUBE['sigla']}", layout="wide")
+st.set_page_config(page_title=f"Raio-X Individual | {visual.CLUBE['sigla']}", layout="wide", initial_sidebar_state="collapsed")
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
+
+#Chama MENU HORIZONTAL
+ui.renderizar_menu_superior(pagina_atual="Atleta") # <-- Nome tem que ser igual ao que você botou lá no nav_items
 
 # Cabeçalho Padronizado
 ui.renderizar_cabecalho("Relatório Individual", "Análise de performance e comparação histórica")
@@ -121,8 +124,7 @@ fig_ev.update_layout(
     showlegend=False
 )
 
-# use_container_width removido conforme solicitado
-st.plotly_chart(fig_ev)
+st.plotly_chart(fig_ev, width='stretch')
 
 # =====================================================================
 # RADAR DE INTENSIDADE (PERFIL DE AÇÕES)

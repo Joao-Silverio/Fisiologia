@@ -14,7 +14,10 @@ import Source.UI.visual as visual
 import Source.UI.components as ui
 
 # 1. Carrega a imagem com segurança
-st.set_page_config(page_title=f"Live Tracker | {visual.CLUBE['sigla']}", layout="wide")
+st.set_page_config(page_title=f"Live Tracker | {visual.CLUBE['sigla']}", layout="wide", initial_sidebar_state="collapsed")
+
+# CHAMA O NOVO MENU SUPERIOR (E o fundo padrão)
+ui.renderizar_menu_superior(pagina_atual="Live") # <-- Nome tem que ser igual ao que você botou lá no nav_items
 
 # Cabeçalho Padronizado UI 
 ui.renderizar_cabecalho("Live Tracker", "Projeção de Carga Física e Machine Learning")
@@ -360,7 +363,7 @@ for periodo in [1, 2]:
                 height=650, hovermode='x unified', margin=dict(l=20, r=20, t=50, b=200)
             )
 
-            st.plotly_chart(fig, use_container_width=True, key=f"grafico_{periodo}")
+            st.plotly_chart(fig, width='stretch', key=f"grafico_{periodo}")
                 
         else:
             st.info(f"Nenhum dado encontrado para o {periodo}º Tempo deste atleta.")

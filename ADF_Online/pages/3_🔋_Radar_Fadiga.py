@@ -11,7 +11,10 @@ import Source.UI.visual as visual
 import Source.UI.components as ui
 
 # 2. Configuração Visual
-st.set_page_config(page_title=f"Radar de Fadiga | {visual.CLUBE['sigla']}", layout="wide")
+st.set_page_config(page_title=f"Radar de Fadiga | {visual.CLUBE['sigla']}", layout="wide", initial_sidebar_state="collapsed")
+
+# 3. CHAMA O NOVO MENU SUPERIOR (E o fundo padrão)
+ui.renderizar_menu_superior(pagina_atual="Fadiga") # <-- Nome tem
 
 # 3. Cabeçalho Padronizado
 ui.renderizar_cabecalho("Radar de Fadiga", "Mapeamento de ausência de estímulo (>19km/h)")
@@ -100,7 +103,7 @@ with col_esq:
                      orientation='h', template='plotly_white',
                      color_discrete_sequence=px.colors.qualitative.Safe)
     fig_rank.update_layout(barmode='stack', yaxis={'categoryorder':'total ascending'}, height=450)
-    st.plotly_chart(fig_rank, use_container_width=True)
+    st.plotly_chart(fig_rank, width='stretch')
 
 with col_dir:
     st.subheader("Densidade de Alta Velocidade (V4)")
@@ -109,7 +112,7 @@ with col_dir:
                                  color_continuous_scale="Viridis", template='plotly_white',
                                  labels={'Interval': 'Minuto do Jogo', col_v4: 'Metros em V4'})
     fig_heat.update_layout(height=450)
-    st.plotly_chart(fig_heat, use_container_width=True)
+    st.plotly_chart(fig_heat, width='stretch')
 
 # ==========================================
 # 5. MAPA DE OCIOSIDADE SOBRE A HISTÓRIA DO JOGO (DEFINITIVO)
@@ -174,4 +177,4 @@ fig_final.update_layout(
     legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
 )
 
-st.plotly_chart(fig_final, use_container_width=True)
+st.plotly_chart(fig_final, width='stretch', key="mapa_ociosidade_final")

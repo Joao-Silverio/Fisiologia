@@ -11,7 +11,10 @@ import Source.UI.visual as visual
 import Source.UI.components as ui
 
 # 2. Configuração Visual
-st.set_page_config(page_title=f"Comparação | {visual.CLUBE['sigla']}", layout="wide")
+st.set_page_config(page_title=f"Comparação | {visual.CLUBE['sigla']}", layout="wide", initial_sidebar_state="collapsed")
+
+#CHAMA MENU NOVO SUPERIOR (E o fundo padrão)
+ui.renderizar_menu_superior(pagina_atual="Comparação") # <-- Nome tem que ser igual ao que você botou lá no nav_items
 
 # 3. Cabeçalho Padronizado
 ui.renderizar_cabecalho("Batalha de Atletas", "Comparativo direto de performance e métricas de GPS")
@@ -258,7 +261,7 @@ with col_radar:
         legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
         height=450, margin=dict(t=30, b=40, l=40, r=40)
     )
-    st.plotly_chart(fig_radar, use_container_width=True)
+    st.plotly_chart(fig_radar, width='stretch')
 
 with col_timeline:
     st.subheader("📈 Corrida de Ritmo (Timeline)")
@@ -303,13 +306,13 @@ with col_timeline:
 
     # Renderização de cada aba (COM A KEY ADICIONADA PARA EVITAR ERROS)
     with tab0:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'Total_Dist_Acum', 'Distância Total Acumulada (m)'), use_container_width=True, key="grafico_tab0")
+        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'Total_Dist_Acum', 'Distância Total Acumulada (m)'), width='stretch', key="grafico_tab0")
         
     with tab1:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V4_Acum', 'Volume de V4 (m)'), use_container_width=True, key="grafico_tab1")
+        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V4_Acum', 'Volume de V4 (m)'), width='stretch', key="grafico_tab1")
         
     with tab2:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V5_Acum', 'Volume de Sprint'), use_container_width=True, key="grafico_tab2")
+        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V5_Acum', 'Volume de Sprint'), width='stretch', key="grafico_tab2")
         
     with tab3:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'AccDec_Acum', 'Ações de Acc/Dec'), use_container_width=True, key="grafico_tab3")
+        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'AccDec_Acum', 'Ações de Acc/Dec'), width='stretch', key="grafico_tab3")

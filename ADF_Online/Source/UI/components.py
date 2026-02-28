@@ -4,14 +4,14 @@ import Source.UI.visual as visual
 
 def renderizar_cabecalho(titulo, subtitulo):
     """Gera um cabeçalho padrão e injeta CSS para subir o conteúdo da página."""
-    st.markdown("""
-        <style>
-            .block-container {
-                padding-top: 1.5rem !important;
-                padding-bottom: 1rem !important;
-            }
-        </style>
-    """, unsafe_allow_html=True)
+    #st.markdown("""
+     #   <style>
+      #      .block-container {
+       #         padding-top: 1.5rem !important;
+        #        padding-bottom: 1rem !important;
+         #   }
+        #</style>
+    #""", unsafe_allow_html=True)
 
     c1, c2 = st.columns([1, 10])
     with c1:
@@ -72,3 +72,117 @@ def renderizar_card_kpi(titulo, valor, cor_borda=None, icone="📊", delta=None,
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
+
+import streamlit as st
+import Source.UI.visual as visual
+
+def renderizar_menu_superior(pagina_atual="Home"):
+    """
+    Injeta o CSS para ocultar a sidebar padrão e renderiza um menu superior moderno.
+    Ataca os data-testids oficiais do Streamlit para vencer o config.toml.
+    """
+    st.markdown(
+        f"""
+        <style>
+            /* 1. Fundo e ocultação da sidebar nativa */
+            .stApp {{
+                background:
+                    radial-gradient(circle at top right, {visual.CORES.get('primaria', '#FDFD96')}20 0%, transparent 35%),
+                    radial-gradient(circle at bottom left, {visual.CORES.get('secundaria', '#60A5FA')}22 0%, transparent 40%);
+            }}
+            .block-container {{ padding-top: 1.1rem !important; }}
+            
+            [data-testid="stSidebarNav"], [data-testid="stSidebar"], [data-testid="collapsedControl"] {{ 
+                display: none !important; 
+            }}
+            
+            /* 2. Container flutuante do Menu */
+            .home-nav-wrap {{
+                position: sticky; top: 0.5rem; z-index: 9999;
+                background: rgba(15, 23, 42, 0.85);
+                border: 1px solid #334155; border-radius: 14px;
+                padding: 10px; backdrop-filter: blur(10px); margin-bottom: 1.5rem;
+            }}
+
+            /* 🟢 3. BOTÃO ATIVO (Forçando a sobreposição do config.toml) */
+            /* O Streamlit usa baseButton-primary para botões type="primary" */
+            .home-nav-wrap button[data-testid="baseButton-primary"] {{
+                background-color: #FFFFFF !important;
+                border: 1px solid #FFFFFF !important;
+                border-radius: 10px !important;
+                box-shadow: 0 4px 15px rgba(255, 255, 255, 0.25) !important;
+                min-height: 42px !important;
+            }}
+            
+            /* Força TODO o texto e ícone dentro do botão primário a ser preto */
+            .home-nav-wrap button[data-testid="baseButton-primary"] * {{
+                color: #000000 !important;
+                font-weight: 800 !important;
+            }}
+
+            /* Efeito hover (passar o rato) do botão selecionado */
+            .home-nav-wrap button[data-testid="baseButton-primary"]:hover {{
+                background-color: #E2E8F0 !important; /* Um cinza muito claro */
+                border-color: #E2E8F0 !important;
+            }}
+
+            /* 🔴 4. BOTÕES INATIVOS */
+            /* O Streamlit usa baseButton-secondary para botões type="secondary" */
+            .home-nav-wrap button[data-testid="baseButton-secondary"] {{
+                background-color: transparent !important;
+                border: 1px solid #334155 !important;
+                border-radius: 10px !important;
+                min-height: 42px !important;
+            }}
+            
+            /* Cor do texto dos botões inativos */
+            .home-nav-wrap button[data-testid="baseButton-secondary"] p,
+            .home-nav-wrap button[data-testid="baseButton-secondary"] span {{
+                color: {visual.CORES.get('texto_claro', '#94A3B8')} !important;
+                font-weight: 500 !important;
+            }}
+
+            /* Hover dos botões inativos */
+            .home-nav-wrap button[data-testid="baseButton-secondary"]:hover {{
+                border-color: {visual.CORES.get('secundaria', '#60A5FA')} !important;
+                background-color: rgba(96, 165, 250, 0.1) !important;
+            }}
+            .home-nav-wrap button[data-testid="baseButton-secondary"]:hover p,
+            .home-nav-wrap button[data-testid="baseButton-secondary"]:hover span {{
+                color: #FFFFFF !important;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # 5. Estrutura dos caminhos com ÍCONES MATERIAL DESIGN
+    nav_items = [
+        ("Home.py", "Home", ":material/home:"),
+        ("pages/1_🔴_Live_Tracker.py", "Live", ":material/sensors:"),
+        ("pages/2_📊_Relatorio_HIA.py", "Relatório", ":material/analytics:"),
+        ("pages/3_🔋_Radar_Fadiga.py", "Fadiga", ":material/battery_charging_full:"),
+        ("pages/4_📅_Temporada.py", "Temporada", ":material/calendar_month:"),
+        ("pages/5_⚔️_Comparacao_Atletas.py", "Comparação", ":material/compare_arrows:"),
+        ("pages/6_👤_Individual_Atleta.py", "Atleta", ":material/person:"),
+    ]
+
+    # 6. Renderização dos Botões
+    st.markdown("<div class='home-nav-wrap'>", unsafe_allow_html=True)
+    cols = st.columns(len(nav_items))
+    
+    for col, (caminho_pagina, label, icon) in zip(cols, nav_items):
+        with col:
+            # Validação
+            is_active = label.lower() in pagina_atual.lower()
+            
+            if st.button(
+                f"{icon} {label}",
+                key=f"nav_top_{label}",
+                width='stretch',
+                type="primary" if is_active else "secondary",
+            ):
+                if not is_active:
+                    st.switch_page(caminho_pagina)
+                
+    st.markdown("</div>", unsafe_allow_html=True)

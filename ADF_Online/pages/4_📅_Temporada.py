@@ -11,7 +11,10 @@ import Source.UI.visual as visual
 import Source.UI.components as ui
 
 # 2. Configuração Visual
-st.set_page_config(page_title=f"Temporada | {visual.CLUBE['sigla']}", layout="wide")
+st.set_page_config(page_title=f"Temporada | {visual.CLUBE['sigla']}", layout="wide", initial_sidebar_state="collapsed")
+
+#Chama MENU NOVO SUPERIOR (E o fundo padrão)
+ui.renderizar_menu_superior(pagina_atual="Temporada") # <-- Nome tem que ser igual ao que você botou lá no nav_items
 
 # 3. Cabeçalho Padronizado
 ui.renderizar_cabecalho("Raio-X da Temporada", "Análise macro do desgaste da equipa ao longo do calendário")
