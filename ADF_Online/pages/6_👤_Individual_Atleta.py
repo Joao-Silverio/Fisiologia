@@ -110,7 +110,7 @@ st.markdown("### 🧭 Estrutura de Análise Jogo a Jogo")
 aba_timeline, aba_comparativo, aba_clusters, aba_insights = st.tabs([
     "📈 Linha do tempo",
     "⚔️ Comparativo",
-    "🏃 Clusters Intensidade",
+    "🏃 Clusters de Intensidade",
     "💡 Insights"
 ])
 
@@ -146,16 +146,18 @@ with aba_timeline:
                 for val in df_evolucao[metrica_grafico]
             ]
             
-            # Construção do gráfico customizado
+            # Construção do gráfico customizado (agora com TEXTO nas bolinhas)
             fig = go.Figure()
             
             fig.add_trace(go.Scatter(
                 x=df_evolucao['Data_Display'],
                 y=df_evolucao[metrica_grafico],
-                mode='lines+markers',
+                mode='lines+markers+text', # Adicionado 'text' para mostrar o valor direto no gráfico
                 name=metrica_grafico,
+                text=df_evolucao[metrica_grafico].round(1), # Pega o valor arredondado para exibir
+                textposition='top center', # Posição do texto acima da bolinha
                 line=dict(color=visual.CORES["secundaria"], width=2),
-                marker=dict(size=12, color=cores_marcadores, line=dict(width=1, color=visual.CORES["fundo_card"])),
+                marker=dict(size=10, color=cores_marcadores, line=dict(width=1, color=visual.CORES["fundo_card"])),
                 customdata=df_evolucao[['Minutagem']],
                 hovertemplate="<b>Jogo:</b> %{x}<br>" +
                               "<b>Valor:</b> %{y:.1f}<br>" +
@@ -167,7 +169,7 @@ with aba_timeline:
                 y=media_metrica, 
                 line_dash="dash", 
                 line_color=visual.CORES["texto_claro"],
-                annotation_text=f"Média: {media_metrica:.1f}", 
+                annotation_text=f"Média Geral: {media_metrica:.1f}", 
                 annotation_position="top left",
                 annotation_font_color=visual.CORES["texto_claro"]
             )
@@ -182,11 +184,21 @@ with aba_timeline:
 
         with col_b:
             st.markdown("**Resumo (Últimos 5 jogos)**")
+            
+            # Pega os últimos 5 jogos
             df_resumo = df_evolucao[['Data_Display', metrica_grafico, 'Minutagem']].tail(5).sort_values('Data_Display', ascending=False)
             df_resumo.rename(columns={'Data_Display': 'Jogo'}, inplace=True)
-            # Arredonda a métrica para visualização na tabela
             df_resumo[metrica_grafico] = df_resumo[metrica_grafico].round(1)
-            st.dataframe(df_resumo, use_container_width=True, hide_index=True)
+            
+            # Calcula a média destes últimos 5 jogos e cria uma nova linha
+            media_resumo_metrica = df_resumo[metrica_grafico].mean().round(1)
+            media_resumo_minutos = df_resumo['Minutagem'].mean().round(0)
+            
+            # Adiciona a linha "MÉDIA" no final da tabela
+            linha_media = pd.DataFrame([{'Jogo': 'MÉDIA', metrica_grafico: media_resumo_metrica, 'Minutagem': media_resumo_minutos}])
+            df_resumo_final = pd.concat([df_resumo, linha_media], ignore_index=True)
+            
+            st.dataframe(df_resumo_final, use_container_width=True, hide_index=True)
     else:
         st.info("Não há dados suficientes para gerar a linha do tempo neste recorte.")
 
@@ -194,7 +206,6 @@ with aba_timeline:
 with aba_comparativo:
     st.markdown("#### Diferenças do jogo selecionado para a sua média histórica")
     
-    # ADICIONADO: V4 Dist e V5 Dist
     metricas_alvo = ["Total Distance", "Player Load", "HIA", "V5 To8 Eff", "V4 Dist", "V5 Dist"]
     
     if not df_jogo_atleta.empty and not df_historico_atleta.empty:
@@ -226,25 +237,64 @@ with aba_comparativo:
 
 # ----------------- ABA 3: CLUSTERS -----------------
 with aba_clusters:
-    st.markdown(f"#### Ações por zonas de intensidade (Jogo Atual - {periodo_selecionado})")
+    st.markdown(f"#### Perfil de Intensidade: V4 Dist vs Distância Total ({periodo_selecionado})")
     
-    cluster_cols = st.columns(3)
-    soma_jogo = df_jogo_atleta.sum(numeric_only=True)
+    # Agrupa todos os jogos do atleta para calcular a Intensidade (V4 Dist / Total Distance)
+    df_intensidade = df_atleta_total.groupby(['Data', 'Data_Display'])[['Total Distance', 'V4 Dist']].sum().reset_index()
     
-    with cluster_cols[0]:
-        st.markdown("**🏃 Moderada (V4)**")
-        st.metric("Esforços V4", f"{int(soma_jogo.get('V4 To8 Eff', 0))}")
-        st.metric("Distância V4", f"{soma_jogo.get('V4 Dist', 0):.1f} m")
+    # Evita divisão por zero substituindo 0 por 1 no Total Distance para o cálculo
+    df_intensidade['Intensidade (%)'] = (df_intensidade['V4 Dist'] / df_intensidade['Total Distance'].replace(0, 1)) * 100
 
-    with cluster_cols[1]:
-        st.markdown("**⚡ Alta/Sprints (V5+)**")
-        st.metric("Esforços V5+", f"{int(soma_jogo.get('V5 To8 Eff', 0) + soma_jogo.get('V6 To8 Eff', 0))}")
-        st.metric("Distância V5+", f"{soma_jogo.get('V5 Dist', 0):.1f} m")
+    if not df_jogo_atleta.empty and len(df_intensidade) > 0:
+        # Pega os dados apenas do jogo selecionado no funil
+        jogo_atual_row = df_intensidade[df_intensidade['Data'] == jogo_destaque_data]
+        
+        if not jogo_atual_row.empty:
+            intensidade_atual = jogo_atual_row['Intensidade (%)'].values[0]
+            dist_total_atual = jogo_atual_row['Total Distance'].values[0]
+            v4_atual = jogo_atual_row['V4 Dist'].values[0]
+        else:
+            intensidade_atual = dist_total_atual = v4_atual = 0
 
-    with cluster_cols[2]:
-        st.markdown("**🛑 Mecânica (Acel/Dec)**")
-        st.metric("Acelerações (>3m/s²)", f"{int(soma_jogo.get('Acc3 Eff', 0))}")
-        st.metric("Desacelerações (<-3m/s²)", f"{int(soma_jogo.get('Dec3 Eff', 0))}")
+        # Separa os clusters baseado no próprio histórico do atleta (divisão em 3 terços: 33% inferiores, 33% meio, 33% topo)
+        p33 = df_intensidade['Intensidade (%)'].quantile(0.33)
+        p66 = df_intensidade['Intensidade (%)'].quantile(0.66)
+
+        if intensidade_atual >= p66:
+            nome_cluster = "🔴 Alta Intensidade"
+            desc_cluster = "O atleta correu em alta velocidade numa proporção muito maior que o seu normal."
+        elif intensidade_atual >= p33:
+            nome_cluster = "🟡 Intensidade Moderada"
+            desc_cluster = "A relação entre a distância percorrida e o esforço intenso está no padrão habitual."
+        else:
+            nome_cluster = "🟢 Baixa Intensidade"
+            desc_cluster = "Jogo cadenciado. O volume de V4 foi baixo em relação à distância total percorrida."
+
+        c1, c2, c3 = st.columns([1, 1, 1.5])
+
+        with c1:
+            st.markdown("**Jogo Analisado**")
+            st.metric("Índice de Intensidade", f"{intensidade_atual:.1f}%")
+            st.caption(f"**V4 Dist:** {v4_atual:.1f} m")
+            st.caption(f"**Dist Total:** {dist_total_atual:.1f} m")
+
+        with c2:
+            st.markdown("**Classificação do Jogo**")
+            st.info(f"**{nome_cluster}**\n\n{desc_cluster}")
+            st.write(f"Média Histórica do Atleta: **{df_intensidade['Intensidade (%)'].mean():.1f}%**")
+
+        with c3:
+            st.markdown("**🏆 Top 3 Jogos Mais Intensos (Histórico)**")
+            top_3 = df_intensidade.sort_values(by='Intensidade (%)', ascending=False).head(3)
+            
+            # Formatação da tabela do Top 3
+            top_3_display = top_3[['Data_Display', 'Intensidade (%)', 'V4 Dist']].rename(columns={'Data_Display': 'Jogo'})
+            top_3_display['Intensidade (%)'] = top_3_display['Intensidade (%)'].round(1).astype(str) + '%'
+            top_3_display['V4 Dist'] = top_3_display['V4 Dist'].round(1)
+            
+            st.dataframe(top_3_display, use_container_width=True, hide_index=True)
+    else:
+        st.info("Dados insuficientes para calcular clusters de intensidade.")
 
 # ----------------- ABA 4: INSIGHTS -----------------
 with aba_insights:
