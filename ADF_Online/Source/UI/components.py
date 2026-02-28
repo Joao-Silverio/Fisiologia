@@ -73,18 +73,16 @@ def renderizar_card_kpi(titulo, valor, cor_borda=None, icone="📊", delta=None,
     """
     st.markdown(html, unsafe_allow_html=True)
 
-import streamlit as st
-import Source.UI.visual as visual
 
 def renderizar_menu_superior(pagina_atual="Home"):
     """
-    Renderiza um menu superior moderno usando o seletor CSS :has() 
-    para garantir compatibilidade com as versões mais recentes do Streamlit online.
+    Renderiza o menu superior com CSS simplificado e robusto.
     """
+    # 1. CSS Global e Ocultação da Sidebar
     st.markdown(
         f"""
         <style>
-            /* 1. Fundo da tela principal e ocultação da sidebar nativa */
+            /* Fundo da tela principal */
             .stApp {{
                 background:
                     radial-gradient(circle at top right, {visual.CORES.get('primaria', '#FDFD96')}20 0%, transparent 35%),
@@ -92,23 +90,28 @@ def renderizar_menu_superior(pagina_atual="Home"):
             }}
             .block-container {{ padding-top: 1.1rem !important; }}
             
+            /* Ocultar a sidebar nativa do Streamlit */
             [data-testid="stSidebarNav"], [data-testid="stSidebar"], [data-testid="collapsedControl"] {{ 
                 display: none !important; 
             }}
             
-            /* 🎯 2. O SEGREDO: Estilizando o container exato das colunas */
-            /* Ele busca a "caixa" mãe que tem a nossa marca, e aplica os estilos de vidro na "caixa" logo abaixo (o menu) */
-            div.element-container:has(#menu-marca) + div.element-container [data-testid="stHorizontalBlock"] {{
-                background: rgba(15, 23, 42, 0.85);
-                border: 1px solid #334155; 
-                border-radius: 14px;
-                padding: 10px; 
-                backdrop-filter: blur(10px); 
-                margin-bottom: 1.5rem;
+            /* Estilos específicos para a caixa do menu (stHorizontalBlock) na parte SUPERIOR da página */
+            /* Isso garante que afete as primeiras colunas renderizadas */
+            .main .block-container > div:first-child [data-testid="stHorizontalBlock"] {{
+                background: rgba(15, 23, 42, 0.85) !important;
+                border: 1px solid #334155 !important; 
+                border-radius: 14px !important;
+                padding: 10px !important; 
+                backdrop-filter: blur(10px) !important; 
+                margin-bottom: 1.5rem !important;
+                position: sticky !important;
+                top: 0.5rem !important;
+                z-index: 9999 !important;
             }}
 
-            /* 🟢 3. BOTÃO ATIVO */
-            div.element-container:has(#menu-marca) + div.element-container button[data-testid="baseButton-primary"] {{
+            /* --- ESTILIZAÇÃO GLOBAL DOS BOTÕES --- */
+            /* BOTÃO ATIVO (Primary) */
+            button[data-testid="baseButton-primary"] {{
                 background-color: #FFFFFF !important;
                 border: 1px solid #FFFFFF !important;
                 border-radius: 10px !important;
@@ -116,46 +119,44 @@ def renderizar_menu_superior(pagina_atual="Home"):
                 min-height: 42px !important;
             }}
             
-            div.element-container:has(#menu-marca) + div.element-container button[data-testid="baseButton-primary"] * {{
+            button[data-testid="baseButton-primary"] * {{
                 color: #000000 !important;
                 font-weight: 800 !important;
             }}
 
-            div.element-container:has(#menu-marca) + div.element-container button[data-testid="baseButton-primary"]:hover {{
+            button[data-testid="baseButton-primary"]:hover {{
                 background-color: #E2E8F0 !important; 
                 border-color: #E2E8F0 !important;
             }}
 
-            /* 🔴 4. BOTÕES INATIVOS */
-            div.element-container:has(#menu-marca) + div.element-container button[data-testid="baseButton-secondary"] {{
+            /* BOTÕES INATIVOS (Secondary) */
+            button[data-testid="baseButton-secondary"] {{
                 background-color: transparent !important;
                 border: 1px solid #334155 !important;
                 border-radius: 10px !important;
                 min-height: 42px !important;
             }}
             
-            div.element-container:has(#menu-marca) + div.element-container button[data-testid="baseButton-secondary"] p,
-            div.element-container:has(#menu-marca) + div.element-container button[data-testid="baseButton-secondary"] span {{
+            button[data-testid="baseButton-secondary"] p,
+            button[data-testid="baseButton-secondary"] span {{
                 color: {visual.CORES.get('texto_claro', '#94A3B8')} !important;
                 font-weight: 500 !important;
             }}
 
-            div.element-container:has(#menu-marca) + div.element-container button[data-testid="baseButton-secondary"]:hover {{
+            button[data-testid="baseButton-secondary"]:hover {{
                 border-color: {visual.CORES.get('secundaria', '#60A5FA')} !important;
                 background-color: rgba(96, 165, 250, 0.1) !important;
             }}
-            div.element-container:has(#menu-marca) + div.element-container button[data-testid="baseButton-secondary"]:hover p,
-            div.element-container:has(#menu-marca) + div.element-container button[data-testid="baseButton-secondary"]:hover span {{
+            button[data-testid="baseButton-secondary"]:hover p,
+            button[data-testid="baseButton-secondary"]:hover span {{
                 color: #FFFFFF !important;
             }}
         </style>
-        
-        <div id="menu-marca"></div>
         """,
         unsafe_allow_html=True,
     )
 
-    # 5. Estrutura dos caminhos com ÍCONES MATERIAL DESIGN
+    # 2. Estrutura dos caminhos com ÍCONES MATERIAL DESIGN
     nav_items = [
         ("Home.py", "Home", ":material/home:"),
         ("pages/1_🔴_Live_Tracker.py", "Live", ":material/sensors:"),
@@ -166,19 +167,23 @@ def renderizar_menu_superior(pagina_atual="Home"):
         ("pages/6_👤_Individual_Atleta.py", "Atleta", ":material/person:"),
     ]
 
-    # 6. Renderização dos Botões
-    # ATENÇÃO: Nenhum st.markdown("<div...>") deve abraçar as colunas!
-    cols = st.columns(len(nav_items))
+    # 3. Renderização dos Botões
+    # Cria um container específico para o menu
+    menu_container = st.container()
     
-    for col, (caminho_pagina, label, icon) in zip(cols, nav_items):
-        with col:
-            is_active = label.lower() in pagina_atual.lower()
-            
-            if st.button(
-                f"{icon} {label}",
-                key=f"nav_top_{label}",
-                use_container_width=True, # Substitui o width='stretch' que costuma dar problema em deploys
-                type="primary" if is_active else "secondary",
-            ):
-                if not is_active:
-                    st.switch_page(caminho_pagina)
+    with menu_container:
+        cols = st.columns(len(nav_items))
+        
+        for col, (caminho_pagina, label, icon) in zip(cols, nav_items):
+            with col:
+                is_active = label.lower() in pagina_atual.lower()
+                
+                # Utiliza width="stretch" conforme documentação mais recente
+                if st.button(
+                    f"{icon} {label}",
+                    key=f"nav_top_{label}",
+                    width="stretch",
+                    type="primary" if is_active else "secondary",
+                ):
+                    if not is_active:
+                        st.switch_page(caminho_pagina)
