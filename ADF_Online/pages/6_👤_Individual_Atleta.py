@@ -1,8 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.graph_objs as go
-import plotly.express as px
 import warnings
 
 # Importações seguindo o padrão da arquitetura
@@ -60,100 +57,129 @@ df_jogo_atleta = df_atleta_total[df_atleta_total['Data'] == jogo_destaque_data]
 df_historico_atleta = df_atleta_total[df_atleta_total['Data'] != jogo_destaque_data]
 
 # =====================================================================
-# KPIs DE PERFORMANCE (DESTAQUE VS MÉDIA DA TEMPORADA)
+# ESTRUTURA DA PÁGINA INDIVIDUAL (SEM GRÁFICOS)
 # =====================================================================
-st.markdown(f"#### 📊 Performance: {atleta_selecionado} em {jogo_destaque_display}")
+st.markdown(f"#### 👤 Painel Individual: {atleta_selecionado} | Jogo {jogo_destaque_display}")
 
-metrics_map = [
-    {"label": "Distância Total", "key": "Total Distance", "unit": "m", "color": visual.CORES["primaria"]},
-    {"label": "Ações V4+", "key": "V4 To8 Eff", "unit": "", "color": visual.CORES["secundaria"]},
-    {"label": "Ações HIA", "key": "HIA", "unit": "", "color": visual.CORES["alerta_fadiga"]},
-    {"label": "Carga (PL)", "key": "Player Load", "unit": "", "color": visual.CORES["aviso_carga"]}
-]
+total_jogos = df_atleta_total['Data'].nunique()
+total_minutos = int(df_jogo_atleta['Duration'].sum()) if 'Duration' in df_jogo_atleta.columns else 0
+media_minutos = (
+    df_atleta_total.groupby('Data')['Duration'].sum().mean()
+    if 'Duration' in df_atleta_total.columns and not df_atleta_total.empty
+    else 0
+)
 
-cols_kpi = st.columns(len(metrics_map))
+col_kpi_1, col_kpi_2, col_kpi_3 = st.columns(3)
 
-for i, met in enumerate(metrics_map):
-    val_jogo = df_jogo_atleta[met['key']].sum()
-    # Média por jogo no histórico
-    val_hist = df_historico_atleta.groupby('Data')[met['key']].sum().mean() if not df_historico_atleta.empty else val_jogo
-    
-    delta_pct = ((val_jogo / val_hist) - 1) * 100 if val_hist > 0 else 0
-    
-    with cols_kpi[i]:
-        ui.renderizar_card_kpi(
-            met['label'], 
-            f"{val_jogo:.1f}{met['unit']}" if "Dist" in met['key'] else f"{val_jogo:.0f}", 
-            cor_borda=met['color'],
-            delta=f"{delta_pct:+.1f}% vs Média",
-            delta_color="normal" if met['key'] != "Player Load" else "inverse"
+with col_kpi_1:
+    ui.renderizar_card_kpi("Jogos no Histórico", f"{total_jogos}", cor_borda=visual.CORES["primaria"])
+with col_kpi_2:
+    ui.renderizar_card_kpi("Minutagem no Jogo", f"{total_minutos} min", cor_borda=visual.CORES["secundaria"])
+with col_kpi_3:
+    ui.renderizar_card_kpi("Média de Minutos", f"{media_minutos:.0f} min", cor_borda=visual.CORES["aviso_carga"])
+
+st.markdown("### 🧭 Estrutura de Análise Jogo a Jogo")
+
+aba_timeline, aba_comparativo, aba_minutagem, aba_clusters, aba_insights = st.tabs([
+    "📈 Linha do tempo",
+    "⚔️ Comparativo entre jogos",
+    "⏱️ Minutagens",
+    "🏃 Clusters Velocidade/Aceleração",
+    "💡 Insights e próximos passos"
+])
+
+with aba_timeline:
+    st.markdown("#### Evolução de performance por partida")
+    st.write(
+        "Use este bloco para mostrar a evolução do atleta em cada jogo (distância, HIA, Player Load, ações em alta intensidade etc.)."
+    )
+
+    col_a, col_b = st.columns([2, 1])
+    with col_a:
+        st.markdown("**Linha do tempo (estrutura sugerida)**")
+        st.dataframe(
+            pd.DataFrame(
+                {
+                    "Jogo": df_atleta_total.sort_values('Data', ascending=False)['Data_Display'].drop_duplicates().head(8),
+                    "Status": "Pendente",
+                    "Observação": "Adicionar variação vs jogo anterior"
+                }
+            ),
+            use_container_width=True,
+            hide_index=True
         )
+    with col_b:
+        st.info("Sugestão: destacar recordes pessoais, tendência de melhora e sinais de queda de rendimento.")
 
-# =====================================================================
-# GRÁFICO DE EVOLUÇÃO (DESTAQUE COLORIDO)
-# =====================================================================
-st.markdown("### 📈 Linha do Tempo da Temporada")
+with aba_comparativo:
+    st.markdown("#### Diferenças do jogo selecionado para outros jogos")
+    st.write("Estrutura para comparação direta contra 1 jogo de referência ou médias de blocos (últimos 3/5 jogos).")
 
-# Métrica selecionável via pills (padrão visuals)
-metrica_evol = st.pills("Visualizar Evolução de:", ["Total Distance", "V4 To8 Eff", "HIA", "Player Load"], default="Total Distance")
+    opcoes_referencia = ["Último jogo", "Média últimos 3", "Média últimos 5", "Melhor jogo da temporada"]
+    st.selectbox("Base de comparação", opcoes_referencia, index=1)
 
-df_ev = df_atleta_total.groupby(['Data', 'Data_Display'])[metrica_evol].sum().reset_index().sort_values('Data')
-df_ev['Status'] = df_ev['Data'].apply(lambda x: 'Destaque' if x == jogo_destaque_data else 'Histórico')
+    st.dataframe(
+        pd.DataFrame(
+            {
+                "Métrica": ["Total Distance", "Player Load", "HIA", "V4 To8 Eff"],
+                "Jogo Atual": ["-", "-", "-", "-"],
+                "Referência": ["-", "-", "-", "-"],
+                "Diferença": ["-", "-", "-", "-"]
+            }
+        ),
+        use_container_width=True,
+        hide_index=True
+    )
 
-fig_ev = px.bar(
-    df_ev, x='Data_Display', y=metrica_evol, color='Status',
-    color_discrete_map={'Destaque': visual.CORES['alerta_fadiga'], 'Histórico': visual.CORES['primaria']},
-    text_auto='.0f'
-)
+with aba_minutagem:
+    st.markdown("#### Minutagem e distribuição por período")
+    st.write("Espaço para mostrar minutos jogados, consistência de participação e carga relativa por tempo.")
 
-# Adiciona linha de média
-media_geral = df_ev[metrica_evol].mean()
-fig_ev.add_hline(y=media_geral, line_dash="dash", line_color=visual.CORES['texto_claro'], 
-                 annotation_text=f"Média: {media_geral:.1f}")
+    st.dataframe(
+        pd.DataFrame(
+            {
+                "Recorte": ["Jogo Atual", "Média Temporada", "Últimos 5 Jogos", "Pico de Minutagem"],
+                "Minutos": ["-", "-", "-", "-"],
+                "% 1º Tempo": ["-", "-", "-", "-"],
+                "% 2º Tempo": ["-", "-", "-", "-"]
+            }
+        ),
+        use_container_width=True,
+        hide_index=True
+    )
 
-fig_ev.update_layout(
-    template='plotly_dark',
-    plot_bgcolor='rgba(0,0,0,0)',
-    paper_bgcolor='rgba(0,0,0,0)',
-    height=400,
-    xaxis_title=None,
-    yaxis_title=metrica_evol,
-    showlegend=False
-)
+with aba_clusters:
+    st.markdown("#### Clusters de velocidade e aceleração")
+    st.write("Área dedicada a segmentar ações por zonas de intensidade e perfil de aceleração/desaceleração.")
 
-# use_container_width removido conforme solicitado
-st.plotly_chart(fig_ev)
+    cluster_cols = st.columns(3)
+    cluster_labels = ["Cluster 1 - Baixa Intensidade", "Cluster 2 - Moderada", "Cluster 3 - Alta Intensidade"]
 
-# =====================================================================
-# RADAR DE INTENSIDADE (PERFIL DE AÇÕES)
-# =====================================================================
-st.markdown("### ⏱️ Perfil de Intensidade por Período")
+    for i, label in enumerate(cluster_labels):
+        with cluster_cols[i]:
+            st.markdown(f"**{label}**")
+            st.caption("Definir ranges de velocidade/aceleração e listar volume de ações por jogo.")
 
-c1, c2 = st.columns(2)
-componentes = [c for c in config.COLS_COMPONENTES_HIA if c in df_completo.columns]
+    st.dataframe(
+        pd.DataFrame(
+            {
+                "Cluster": ["Baixa", "Moderada", "Alta"],
+                "Velocidade (km/h)": ["-", "-", "-"],
+                "Aceleração (m/s²)": ["-", "-", "-"],
+                "Ações no jogo": ["-", "-", "-"]
+            }
+        ),
+        use_container_width=True,
+        hide_index=True
+    )
 
-for idx, periodo in enumerate([1, 2]):
-    with [c1, c2][idx]:
-        st.write(f"**{periodo}º Tempo**")
-        df_p_jogo = df_jogo_atleta[df_jogo_atleta['Período'] == periodo]
-        df_p_hist = df_historico_atleta[df_historico_atleta['Período'] == periodo]
-        
-        if not df_p_jogo.empty and componentes:
-            val_jogo = df_p_jogo[componentes].sum().values
-            val_hist = df_p_hist.groupby('Data')[componentes].sum().mean().values if not df_p_hist.empty else val_jogo
-            
-            fig_rad = go.Figure()
-            fig_rad.add_trace(go.Scatterpolar(r=val_hist, theta=componentes, fill='toself', name='Média Temporada', line=dict(color=visual.CORES['texto_claro'])))
-            fig_rad.add_trace(go.Scatterpolar(r=val_jogo, theta=componentes, fill='toself', name='Jogo Atual', line=dict(color=visual.CORES['alerta_fadiga'])))
-            
-            fig_rad.update_layout(
-                template='plotly_dark',
-                polar=dict(radialaxis=dict(visible=True, showticklabels=False, gridcolor='#334155'),
-                           angularaxis=dict(gridcolor='#334155')),
-                paper_bgcolor='rgba(0,0,0,0)',
-                height=350,
-                margin=dict(t=30, b=30, l=50, r=50)
-            )
-            st.plotly_chart(fig_rad, key=f"radar_ind_{periodo}")
-        else:
-            st.info(f"Sem dados para o {periodo}º tempo.")
+with aba_insights:
+    st.markdown("#### Sugestões de leitura técnica")
+    st.markdown(
+        """
+        - Comparar o jogo atual com a tendência dos últimos jogos para validar melhora real.
+        - Cruzar minutagem com métricas de alta intensidade para avaliar eficiência por minuto.
+        - Monitorar clusters de alta aceleração para ajustar carga e prevenção de risco.
+        - Enviar ao atleta um resumo pós-jogo com 3 pontos: evolução, diferença para referência e foco do próximo jogo.
+        """
+    )
