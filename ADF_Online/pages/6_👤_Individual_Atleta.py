@@ -108,10 +108,9 @@ with col_kpi_3:
 # =====================================================================
 st.markdown("### 🧭 Estrutura de Análise Jogo a Jogo")
 
-aba_timeline, aba_comparativo, aba_minutagem, aba_clusters, aba_insights = st.tabs([
+aba_timeline, aba_comparativo, aba_clusters, aba_insights = st.tabs([
     "📈 Linha do tempo",
     "⚔️ Comparativo",
-    "⏱️ Minutagens",
     "🏃 Clusters Intensidade",
     "💡 Insights"
 ])
@@ -180,20 +179,7 @@ with aba_comparativo:
     else:
         st.warning("Não há dados suficientes para gerar o comparativo. O atleta precisa ter participado de outros jogos.")
 
-# ----------------- ABA 3: MINUTAGEM -----------------
-with aba_minutagem:
-    st.markdown("#### Resumo de Minutagem")
-    
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        st.info(f"**{periodo_selecionado}:** {total_minutos:.0f} minutos jogados na partida selecionada.")
-    with col2:
-        st.info(f"**Média Histórica ({periodo_selecionado}):** {media_minutos:.0f} minutos.")
-        
-    if periodo_selecionado == "Jogo Completo":
-        st.write("Dica: Selecione '1º Tempo' ou '2º Tempo' no filtro superior para ver a quebra exata de minutos por etapa.")
-
-# ----------------- ABA 4: CLUSTERS -----------------
+# ----------------- ABA 3: CLUSTERS -----------------
 with aba_clusters:
     st.markdown(f"#### Ações por zonas de intensidade (Jogo Atual - {periodo_selecionado})")
     
@@ -215,7 +201,7 @@ with aba_clusters:
         st.metric("Acelerações (>3m/s²)", f"{int(soma_jogo.get('Acc3 Eff', 0))}")
         st.metric("Desacelerações (<-3m/s²)", f"{int(soma_jogo.get('Dec3 Eff', 0))}")
 
-# ----------------- ABA 5: INSIGHTS -----------------
+# ----------------- ABA 4: INSIGHTS -----------------
 with aba_insights:
     st.markdown("#### 💡 Insights Automatizados")
     
