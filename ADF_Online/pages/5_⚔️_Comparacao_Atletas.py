@@ -11,7 +11,7 @@ import Source.UI.visual as visual
 import Source.UI.components as ui
 
 # 3. Cabeçalho Padronizado
-ui.renderizar_cabecalho("Batalha de Atletas", "Comparativo direto de performance e métricas de GPS")
+ui.renderizar_cabecalho("Comparação de Atletas", "Comparativo direto de performance e métricas de GPS")
 
 # 1. Pede à página para "piscar os olhos" a cada 2 segundos (2000 ms)
 st_autorefresh(interval=2000, limit=None, key="refresh_desta_pagina")
@@ -59,7 +59,7 @@ with st.container():
         df_jogo_full = df_f1[df_f1['Data_Display'] == jogo_sel]
         
     with c3:
-        periodo_sel = st.radio("⏱️ Período:", ["1º Tempo", "2º Tempo"], horizontal = True)
+        periodo_sel = st.radio("⏱️ Período:", ["Ambos", "1º Tempo", "2º Tempo"], horizontal = True)
 
     # Lista de atletas disponíveis no jogo
     atletas_jogo = sorted(df_jogo_full['Name'].unique())
@@ -71,14 +71,12 @@ with st.container():
         index_a2 = 1 if len(atletas_jogo) > 1 else 0
         atleta_2 = st.selectbox("🔵 Atleta 2 (Desafiante):", atletas_jogo, index=index_a2)
 
-st.markdown("---")
-
 if atleta_1 == atleta_2:
     st.warning("⚠️ Selecione dois atletas diferentes para a comparação.")
     st.stop()
 
 # Aplicação do Filtro de Período
-if periodo_sel == "1º Tempo":
+elif periodo_sel == "1º Tempo":
     df_jogo = df_jogo_full[df_jogo_full['Período'] == 1].copy()
 elif periodo_sel == "2º Tempo":
     df_jogo = df_jogo_full[df_jogo_full['Período'] == 2].copy()
