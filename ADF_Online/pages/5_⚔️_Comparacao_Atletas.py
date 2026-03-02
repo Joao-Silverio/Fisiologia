@@ -11,7 +11,7 @@ import Source.UI.visual as visual
 import Source.UI.components as ui
 
 # 2. Configuração Visual
-st.set_page_config(page_title=f"Comparação | {visual.CLUBE['sigla']}", layout="wide", initial_sidebar_state="collapsed")
+#st.set_page_config(page_title=f"Comparação | {visual.CLUBE['sigla']}", layout="wide", initial_sidebar_state="collapsed")
 
 # CHAMA MENU NOVO SUPERIOR (E o fundo padrão)
 ui.renderizar_menu_superior(pagina_atual="Comparação") 
