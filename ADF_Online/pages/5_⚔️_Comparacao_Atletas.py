@@ -13,21 +13,19 @@ import Source.UI.components as ui
 # 2. Configuração Visual
 st.set_page_config(page_title=f"Comparação | {visual.CLUBE['sigla']}", layout="wide", initial_sidebar_state="collapsed")
 
-#CHAMA MENU NOVO SUPERIOR (E o fundo padrão)
-ui.renderizar_menu_superior(pagina_atual="Comparação") # <-- Nome tem que ser igual ao que você botou lá no nav_items
+# CHAMA MENU NOVO SUPERIOR (E o fundo padrão)
+ui.renderizar_menu_superior(pagina_atual="Comparação") 
 
 # 3. Cabeçalho Padronizado
 ui.renderizar_cabecalho("Batalha de Atletas", "Comparativo direto de performance e métricas de GPS")
 
 # 1. Pede à página para "piscar os olhos" a cada 2 segundos (2000 ms)
-# Usa uma "key" diferente para cada página (ex: "refresh_comparacao", "refresh_hia")
 st_autorefresh(interval=2000, limit=None, key="refresh_desta_pagina")
 
 # 2. Verifica a "impressão digital" (hora exata) do ficheiro Excel
 hora_atual = obter_hora_modificacao(config.ARQUIVO_ORIGINAL)
 
 # 3. Pede os dados. Se a "hora_atual" não mudou, o Streamlit não faz NADA (0% de CPU).
-# Se a "hora_atual" mudou, o Streamlit carrega os dados novos!
 df_novo, df_recordes_novo = load_global_data(hora_atual)
 
 # 4. Atualiza a memória global para os gráficos desenharem com os dados frescos
@@ -35,7 +33,6 @@ if not df_novo.empty:
     st.session_state['df_global'] = df_novo
     st.session_state['df_recordes'] = df_recordes_novo
 
-# E depois continuas a ler o session_state como sempre fizeste:
 if 'df_global' not in st.session_state or st.session_state['df_global'].empty:
     st.warning("⚠️ Carregue os dados na página principal ou verifique o arquivo Excel.")
     st.stop()
@@ -50,13 +47,13 @@ df_base = df_base.sort_values(by='Data', ascending=False)
 
 # 3. Cria o nome de exibição do jogo já com os dados ordenados
 df_base['Data_Display'] = df_base['Data'].dt.strftime('%d/%m/%Y') + ' ' + df_base['Adversário'].astype(str)
+
 # ==========================================
 # 2. FILTROS DE COMPARAÇÃO (TUDO EM UMA LINHA)
 # ==========================================
 st.markdown("### 🔍 Configuração do Duelo")
 
 with st.container():
-    # 5 colunas em uma única linha. O Jogo (c2) recebe um pouco mais de espaço porque o nome é maior.
     c1, c2, c3, c4, c5 = st.columns([1.3, 1.6, 1.1, 1.2, 1.2])
     
     with c1:
@@ -68,7 +65,6 @@ with st.container():
         df_jogo_full = df_f1[df_f1['Data_Display'] == jogo_sel]
         
     with c3:
-        # Alterado de st.radio para st.selectbox para economizar espaço horizontal
         periodo_sel = st.radio("⏱️ Período:", ["1º Tempo", "2º Tempo"], horizontal = True)
 
     # Lista de atletas disponíveis no jogo
@@ -98,33 +94,26 @@ else:
 if df_jogo.empty:
     st.warning(f"⚠️ Não há dados disponíveis para {periodo_sel} neste jogo.")
     st.stop()
+
 # ==========================================
 # 3. PREPARAÇÃO DOS DADOS (AGRUPAMENTO DO JOGO)
 # ==========================================
-# Precisamos somar as métricas de volume para o jogo inteiro
-# Adicionado 'V5 Dist' para pegar a distância em Sprint
 cols_volume = ['Total Distance', 'V4 Dist', 'V5 Dist', 'Player Load']
-# Adicionando HIA e suas quebras (com segurança caso faltem colunas)
 cols_hia = ['V4 To8 Eff', 'V5 To8 Eff', 'V6 To8 Eff', 'Acc3 Eff', 'Dec3 Eff', 'Acc4 Eff', 'Dec4 Eff']
 cols_existentes = [c for c in cols_volume + cols_hia if c in df_jogo.columns]
 
-# Cria a coluna HIA Total se as colunas existirem
 df_jogo['HIA_Total'] = df_jogo[[c for c in cols_hia if c in df_jogo.columns]].sum(axis=1)
 if 'HIA_Total' not in cols_existentes:
     cols_existentes.append('HIA_Total')
 
-# Agrupa tudo por Atleta somando o jogo todo
 df_agrupado = df_jogo.groupby('Name')[cols_existentes].sum().reset_index()
 
-# NOVA MÉTRICA: Soma de Acelerações e Desacelerações (Acc3 + Dec3)
 df_agrupado['AccDec_Total'] = df_agrupado.get('Acc3 Eff', 0) + df_agrupado.get('Dec3 Eff', 0)
 
-# Calcula os Minutos Jogados (Max Interval) por atleta
 minutos_jogados = df_jogo.groupby('Name')['Interval'].nunique().reset_index()
 df_agrupado = pd.merge(df_agrupado, minutos_jogados, on='Name')
 df_agrupado.rename(columns={'Interval': 'Minutos Jogados'}, inplace=True)
 
-# Extrai os dados dos dois lutadores
 df_a1 = df_agrupado[df_agrupado['Name'] == atleta_1].iloc[0] if not df_agrupado[df_agrupado['Name'] == atleta_1].empty else None
 df_a2 = df_agrupado[df_agrupado['Name'] == atleta_2].iloc[0] if not df_agrupado[df_agrupado['Name'] == atleta_2].empty else None
 
@@ -133,7 +122,7 @@ if df_a1 is None or df_a2 is None:
     st.stop()
 
 # ==========================================
-# 4. PAINEL DE KPIs: O DUELO (6 CARDS LADO A LADO)
+# 4. PAINEL DE KPIs: O DUELO
 # ==========================================
 st.subheader("📊 Resumo do Confronto (Jogo Completo)")
 
@@ -142,11 +131,9 @@ c1.markdown(f"<h4 style='text-align: right; color: #EF5350; margin-bottom: 0;'>�
 c2.markdown(f"<h3 style='text-align: center; color: var(--text-color); opacity: 0.7;'>VS</h3>", unsafe_allow_html=True)
 c3.markdown(f"<h4 style='text-align: left; color: #42A5F5; margin-bottom: 0;'>🔵 {atleta_2}</h4><p style='text-align: left; margin-top: 0;'>{df_a2['Minutos Jogados']:.0f} min</p>", unsafe_allow_html=True)
 
-# Agora com 6 colunas para acomodar a métrica de Sprint (V5)
 col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5, col_kpi6 = st.columns(6)
 
 def kpi_card(col, label, val1, val2, unidade=""):
-    # Cores vivas para brilharem no Dark Mode
     cor1 = "#4CAF50" if val1 > val2 else "#EF5350" if val1 < val2 else "gray" 
     cor2 = "#4CAF50" if val2 > val1 else "#EF5350" if val2 < val1 else "gray"
     
@@ -174,7 +161,6 @@ def kpi_card(col, label, val1, val2, unidade=""):
 kpi_card(col_kpi1, "Distância", df_a1.get('Total Distance', 0), df_a2.get('Total Distance', 0), "m")
 kpi_card(col_kpi2, "HIA (Total)", df_a1.get('HIA_Total', 0), df_a2.get('HIA_Total', 0), "")
 kpi_card(col_kpi3, "Distância em V4", df_a1.get('V4 Dist', 0), df_a2.get('V4 Dist', 0), "m")
-# Novo Card: Sprint V5
 kpi_card(col_kpi4, "Distância em Sprints", df_a1.get('V5 Dist', 0), df_a2.get('V5 Dist', 0), "m")
 kpi_card(col_kpi5, "Acc + Dec", df_a1.get('AccDec_Total', 0), df_a2.get('AccDec_Total', 0), "")
 kpi_card(col_kpi6, "Player Load", df_a1.get('Player Load', 0), df_a2.get('Player Load', 0), "")
@@ -182,18 +168,15 @@ kpi_card(col_kpi6, "Player Load", df_a1.get('Player Load', 0), df_a2.get('Player
 # ==========================================
 # 5. RADAR E GRÁFICOS DE LINHA (EM ABAS)
 # ==========================================
-st.markdown("<br>", unsafe_allow_html=True) # Espaço visual
+st.markdown("<br>", unsafe_allow_html=True)
 col_radar, col_timeline = st.columns([1, 1.4])
 
 with col_radar:
     st.subheader("🕸️ Perfil Fisiológico")
     
-    # Radar Chart - Adicionando V5 Dist e garantindo fallback caso a coluna se chame diferente
     metricas_radar = ['Total Distance', 'V4 Dist', 'V5 Dist', 'HIA_Total', 'AccDec_Total', 'Player Load']
-    # Mantém apenas as que realmente existem no df
     metricas_radar = [m for m in metricas_radar if m in df_agrupado.columns]
     
-    # Dicionário para deixar os nomes bonitos no gráfico
     nomes_bonitos = {
         'Total Distance': 'Distância',
         'V4 Dist': 'Distância V4',
@@ -204,30 +187,25 @@ with col_radar:
     }
     
     maximos_time = df_agrupado[metricas_radar].max()
-    
-    # Prevenção contra divisão por zero se o máximo do time for 0
     maximos_time = maximos_time.replace(0, 1) 
 
-    val1_norm = (df_a1[metricas_radar] / maximos_time * 100).fillna(0).tolist()
-    val2_norm = (df_a2[metricas_radar] / maximos_time * 100).fillna(0).tolist()
+    # CORREÇÃO SEGURA DO RADAR
+    val1_norm = (df_a1[metricas_radar].fillna(0) / maximos_time * 100).fillna(0).tolist()
+    val2_norm = (df_a2[metricas_radar].fillna(0) / maximos_time * 100).fillna(0).tolist()
     
-    # 1. EXTRAIR OS VALORES REAIS ORIGINAIS (BÓNUS PARA MOSTRAR NO BALÃO)
     val1_orig = df_a1[metricas_radar].fillna(0).tolist()
     val2_orig = df_a2[metricas_radar].fillna(0).tolist()
     
-    # Fechar o círculo do radar para a linha conectar o fim ao início
     val1_norm += [val1_norm[0]]
     val2_norm += [val2_norm[0]]
-    val1_orig += [val1_orig[0]]  # Fechar também os valores reais
+    val1_orig += [val1_orig[0]]  
     val2_orig += [val2_orig[0]]  
     
-    # Aplicar os nomes curtos e bonitos no eixo do radar
     categorias_labels = [nomes_bonitos.get(m, m) for m in metricas_radar]
     categorias_labels += [categorias_labels[0]]
     
     fig_radar = go.Figure()
     
-    # Atleta 1
     fig_radar.add_trace(go.Scatterpolar(
         r=val1_norm, 
         theta=categorias_labels, 
@@ -235,13 +213,12 @@ with col_radar:
         name=atleta_1, 
         line_color='#EF5350', 
         fillcolor='rgba(239, 83, 80, 0.4)',
-        mode='lines+markers',           # <-- Adiciona os pequenos pontos na ponta
-        hoveron='points',               # <-- O Segredo: O rato passa a ignorar as sobreposições de preenchimento!
-        customdata=val1_orig,           # <-- Passamos o valor absoluto
+        mode='lines+markers',           
+        hoveron='points',               
+        customdata=val1_orig,           
         hovertemplate='<b>%{theta}</b><br>Valor Real: %{customdata:.0f}<br>Escala (%): %{r:.1f}%<extra></extra>'
     ))
     
-    # Atleta 2
     fig_radar.add_trace(go.Scatterpolar(
         r=val2_norm, 
         theta=categorias_labels, 
@@ -266,30 +243,33 @@ with col_radar:
 with col_timeline:
     st.subheader("📈 Corrida de Ritmo (Timeline)")
     
-    # --- Preparação de Dados para as Linhas Acumuladas ---
     df_min_a1 = df_jogo[df_jogo['Name'] == atleta_1].sort_values('Interval').copy()
     df_min_a2 = df_jogo[df_jogo['Name'] == atleta_2].sort_values('Interval').copy()
     
-    # NOVA: Distância Total Acumulada
-    df_min_a1['Total_Dist_Acum'] = df_min_a1.get('Total Distance', pd.Series(0)).cumsum()
-    df_min_a2['Total_Dist_Acum'] = df_min_a2.get('Total Distance', pd.Series(0)).cumsum()
+    # 🔴 CORREÇÃO TIMELINE: Construção segura das métricas para evitar quebra do eixo X
+    df_min_a1['Total_Dist_Acum'] = df_min_a1['Total Distance'].cumsum() if 'Total Distance' in df_min_a1.columns else 0
+    df_min_a2['Total_Dist_Acum'] = df_min_a2['Total Distance'].cumsum() if 'Total Distance' in df_min_a2.columns else 0
     
-    # V4 Acumulada
-    df_min_a1['V4_Acum'] = df_min_a1.get('V4 Dist', pd.Series(0)).cumsum()
-    df_min_a2['V4_Acum'] = df_min_a2.get('V4 Dist', pd.Series(0)).cumsum()
+    df_min_a1['V4_Acum'] = df_min_a1['V4 Dist'].cumsum() if 'V4 Dist' in df_min_a1.columns else 0
+    df_min_a2['V4_Acum'] = df_min_a2['V4 Dist'].cumsum() if 'V4 Dist' in df_min_a2.columns else 0
     
-    # Sprints Acumulados (V5)
     col_sprint = 'V5 Dist' if 'V5 Dist' in df_jogo.columns else 'V5 To8 Eff'
-    df_min_a1['V5_Acum'] = df_min_a1.get(col_sprint, pd.Series(0)).cumsum()
-    df_min_a2['V5_Acum'] = df_min_a2.get(col_sprint, pd.Series(0)).cumsum()
+    df_min_a1['V5_Acum'] = df_min_a1[col_sprint].cumsum() if col_sprint in df_min_a1.columns else 0
+    df_min_a2['V5_Acum'] = df_min_a2[col_sprint].cumsum() if col_sprint in df_min_a2.columns else 0
     
-    # Força (Acc3 + Dec3) Acumulada
-    df_min_a1['AccDec'] = df_min_a1.get('Acc3 Eff', pd.Series(0)) + df_min_a1.get('Dec3 Eff', pd.Series(0))
-    df_min_a2['AccDec'] = df_min_a2.get('Acc3 Eff', pd.Series(0)) + df_min_a2.get('Dec3 Eff', pd.Series(0))
+    # Força (Acc3 + Dec3) alinhada pelo index
+    acc3_a1 = df_min_a1['Acc3 Eff'] if 'Acc3 Eff' in df_min_a1.columns else pd.Series(0, index=df_min_a1.index)
+    dec3_a1 = df_min_a1['Dec3 Eff'] if 'Dec3 Eff' in df_min_a1.columns else pd.Series(0, index=df_min_a1.index)
+    df_min_a1['AccDec'] = acc3_a1 + dec3_a1
+
+    acc3_a2 = df_min_a2['Acc3 Eff'] if 'Acc3 Eff' in df_min_a2.columns else pd.Series(0, index=df_min_a2.index)
+    dec3_a2 = df_min_a2['Dec3 Eff'] if 'Dec3 Eff' in df_min_a2.columns else pd.Series(0, index=df_min_a2.index)
+    df_min_a2['AccDec'] = acc3_a2 + dec3_a2
+
     df_min_a1['AccDec_Acum'] = df_min_a1['AccDec'].cumsum()
     df_min_a2['AccDec_Acum'] = df_min_a2['AccDec'].cumsum()
 
-    # --- Criação das Abas (Tabs) - Adicionado "📏 Distância Total" ---
+    # --- Criação das Abas (Tabs) ---
     tab0, tab1, tab2, tab3 = st.tabs(["📏 Distância Total", "⚡ V4 Acumulada", "🚀 Sprints (V5)", "🛑 Força (Acc3 + Dec3)"])
     
     def desenhar_grafico_linha(df1, df2, coluna_y, titulo_y):
@@ -304,7 +284,6 @@ with col_timeline:
         )
         return fig
 
-    # Renderização de cada aba (COM A KEY ADICIONADA PARA EVITAR ERROS)
     with tab0:
         st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'Total_Dist_Acum', 'Distância Total Acumulada (m)'), width='stretch', key="grafico_tab0")
         
