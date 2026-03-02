@@ -10,12 +10,6 @@ from streamlit_autorefresh import st_autorefresh
 import Source.UI.visual as visual
 import Source.UI.components as ui
 
-# 2. Configuração Visual
-#st.set_page_config(page_title=f"Comparação | {visual.CLUBE['sigla']}", layout="wide", initial_sidebar_state="collapsed")
-
-# CHAMA MENU NOVO SUPERIOR (E o fundo padrão)
-ui.renderizar_menu_superior(pagina_atual="Comparação") 
-
 # 3. Cabeçalho Padronizado
 ui.renderizar_cabecalho("Batalha de Atletas", "Comparativo direto de performance e métricas de GPS")
 
