@@ -174,7 +174,7 @@ def renderizar_menu_superior(pagina_atual="Home"):
                 # Se falhar localmente, é urgência máxima atualizar seu Streamlit local.
                 if st.button(
                     f"{icon} {label}",
-                    key=f"nav_top_{label}",
+                    key=f"nav_top_{pagina_atual}_{label}",
                     width='stretch', 
                     type="primary" if is_active else "secondary",
                 ):
