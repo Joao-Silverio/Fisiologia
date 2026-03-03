@@ -2,6 +2,8 @@
 import streamlit as st
 import Source.UI.visual as visual
 import Source.UI.components as ui
+import pandas as pd
+pd.set_option('future.no_silent_downcasting', True) #Ativa pandas novo comportamente para fillna
 
 # O set_page_config AGORA FICA AQUI NO MAESTRO, UMA ÚNICA VEZ PARA TODO O PROJETO!
 st.set_page_config(

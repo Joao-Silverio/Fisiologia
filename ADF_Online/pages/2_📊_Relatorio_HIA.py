@@ -201,7 +201,7 @@ with col_dir:
         )
         fig.update_traces(hovertemplate='%{y:.2f} ações', selector=dict(type='bar'))
 
-        st.plotly_chart(fig, use_container_width=True, key=f"hia_stacked_{periodo}_{atleta}")
+        st.plotly_chart(fig, width='stretch', key=f"hia_stacked_{periodo}_{atleta}")
         
         # =====================================================================
         # 5 MINIS KPIs EM UMA ÚNICA LINHA ABAIXO DO GRÁFICO

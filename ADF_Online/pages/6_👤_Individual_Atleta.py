@@ -11,20 +11,33 @@ from streamlit_autorefresh import st_autorefresh
 import Source.UI.visual as visual
 import Source.UI.components as ui
 
-# Configuração de Página
-st.set_page_config(page_title=f"Raio-X Individual | {visual.CLUBE['sigla']}", layout="wide", initial_sidebar_state="collapsed")
-warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
-
-# Chama MENU HORIZONTAL
-ui.renderizar_menu_superior(pagina_atual="Atleta")
-
 # Cabeçalho Padronizado
 ui.renderizar_cabecalho("Relatório Individual", "Análise de performance e comparação histórica")
 
 # Refresh e Carregamento de Dados
-st_autorefresh(interval=2000, limit=None, key="refresh_individual_atleta")
+# Carregamento inicial (fora do fragmento — só para garantir que df existe)
 hora_atual = obter_hora_modificacao(config.ARQUIVO_ORIGINAL)
 df_novo, _ = load_global_data(hora_atual)
+if not df_novo.empty:
+    st.session_state['df_global'] = df_novo
+
+if 'df_global' not in st.session_state:
+    st.warning("⚠️ Carregue os dados na Home primeiro.")
+    st.stop()
+
+# 🆕 Fragmento — mesma lógica do Live Tracker
+@st.fragment(run_every="5s")
+def pagina_individual():
+    hora_atual = obter_hora_modificacao(config.ARQUIVO_ORIGINAL)
+    df_novo, _ = load_global_data(hora_atual)
+    if not df_novo.empty:
+        st.session_state['df_global'] = df_novo
+
+    df_completo = st.session_state['df_global'].copy()
+
+    # ... todo o restante do código da página aqui dentro ...
+
+pagina_individual()
 
 if not df_novo.empty:
     st.session_state['df_global'] = df_novo
@@ -219,7 +232,7 @@ with aba_comparativo:
         
         # Média Histórica do atleta
         df_agrupado_hist = df_historico_atleta.groupby('Data')[metricas_alvo].sum()
-        media_historica = df_agrupado_hist.mean().fillna(0)
+        media_historica = df_agrupado_hist.mean().fillna(0).infer_objects(copy=False)
         
         df_comp = pd.DataFrame({
             "Métrica": metricas_alvo,
@@ -227,7 +240,7 @@ with aba_comparativo:
             "Média (Outros Jogos)": media_historica.values.round(1)
         })
         
-        df_comp['Diferença %'] = ((df_comp['Jogo Atual'] - df_comp['Média (Outros Jogos)']) / df_comp['Média (Outros Jogos)'] * 100).fillna(0)
+        df_comp['Diferença %'] = ((df_comp['Jogo Atual'] - df_comp['Média (Outros Jogos)']) / df_comp['Média (Outros Jogos)'] * 100).fillna(0).infer_objects(copy=False)
         
         def formatar_cor(val):
             cor = visual.CORES["ok_prontidao"] if val >= 0 else visual.CORES["alerta_fadiga"]

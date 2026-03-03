@@ -3,6 +3,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
+from Source.Dados.positions import get_position, get_benchmark, classify_performance, position_badge_html, POSITION_CONFIG
+
 # 1. Novas Importações
 import Source.Dados.config as config
 from Source.Dados.data_loader import obter_hora_modificacao, load_global_data
@@ -48,7 +50,7 @@ df_base['Data_Display'] = df_base['Data'].dt.strftime('%d/%m/%Y') + ' ' + df_bas
 st.markdown("### 🔍 Configuração do Duelo")
 
 with st.container():
-    c1, c2, c3, c4, c5 = st.columns([1.3, 1.6, 1.1, 1.2, 1.2])
+    c1, c2, c3, c4, c5 = st.columns([1.3, 1.5, 1.2, 1.2, 1.2])
     
     with c1:
         competicao_sel = st.multiselect("🏆 Competição:", options=df_base['Competição'].unique().tolist() if 'Competição' in df_base.columns else [])
@@ -70,6 +72,9 @@ with st.container():
     with c5:
         index_a2 = 1 if len(atletas_jogo) > 1 else 0
         atleta_2 = st.selectbox("🔵 Atleta 2 (Desafiante):", atletas_jogo, index=index_a2)
+
+pos_a1 = get_position(atleta_1)
+pos_a2 = get_position(atleta_2)
 
 if atleta_1 == atleta_2:
     st.warning("⚠️ Selecione dois atletas diferentes para a comparação.")
@@ -102,9 +107,13 @@ df_agrupado = df_jogo.groupby('Name')[cols_existentes].sum().reset_index()
 
 df_agrupado['AccDec_Total'] = df_agrupado.get('Acc3 Eff', 0) + df_agrupado.get('Dec3 Eff', 0)
 
-minutos_jogados = df_jogo.groupby('Name')['Interval'].nunique().reset_index()
+minutos_jogados = (
+    df_jogo.groupby('Name')
+    .apply(lambda x: x.set_index(['Período', 'Interval']).index.nunique())
+    .reset_index()
+)
+minutos_jogados.columns = ['Name', 'Minutos Jogados']
 df_agrupado = pd.merge(df_agrupado, minutos_jogados, on='Name')
-df_agrupado.rename(columns={'Interval': 'Minutos Jogados'}, inplace=True)
 
 df_a1 = df_agrupado[df_agrupado['Name'] == atleta_1].iloc[0] if not df_agrupado[df_agrupado['Name'] == atleta_1].empty else None
 df_a2 = df_agrupado[df_agrupado['Name'] == atleta_2].iloc[0] if not df_agrupado[df_agrupado['Name'] == atleta_2].empty else None
@@ -118,10 +127,37 @@ if df_a1 is None or df_a2 is None:
 # ==========================================
 st.subheader("📊 Resumo do Confronto (Jogo Completo)")
 
-c1, c2, c3 = st.columns([1, 0.2, 1])
-c1.markdown(f"<h4 style='text-align: right; color: #EF5350; margin-bottom: 0;'>🔴 {atleta_1}</h4><p style='text-align: right; margin-top: 0;'>{df_a1['Minutos Jogados']:.0f} min</p>", unsafe_allow_html=True)
-c2.markdown(f"<h3 style='text-align: center; color: var(--text-color); opacity: 0.7;'>VS</h3>", unsafe_allow_html=True)
-c3.markdown(f"<h4 style='text-align: left; color: #42A5F5; margin-bottom: 0;'>🔵 {atleta_2}</h4><p style='text-align: left; margin-top: 0;'>{df_a2['Minutos Jogados']:.0f} min</p>", unsafe_allow_html=True)
+# PARA:
+c1.markdown(f"""
+    <div style='display:flex; flex-direction:column; align-items:center; gap:4px;'>
+        <div style='display:flex; align-items:center; justify-content:center; gap:10px;'>
+            {position_badge_html(pos_a1)}
+            <h4 style='color:#EF5350; margin:0;'>🔴 {atleta_1}</h4>
+        </div>
+        <p style='margin:0; opacity:0.7; font-size:0.85rem;'>{df_a1['Minutos Jogados']:.0f} min</p>
+    </div>
+""", unsafe_allow_html=True)
+
+c2.markdown("<h3 style='text-align:center; opacity:0.7;'>VS</h3>", unsafe_allow_html=True)
+
+c3.markdown(f"""
+    <div style='display:flex; flex-direction:column; align-items:center; gap:4px;'>
+        <div style='display:flex; align-items:center; justify-content:center; gap:10px;'>
+            <h4 style='color:#42A5F5; margin:0;'>🔵 {atleta_2}</h4>
+            {position_badge_html(pos_a2)}
+        </div>
+        <p style='margin:0; opacity:0.7; font-size:0.85rem;'>{df_a2['Minutos Jogados']:.0f} min</p>
+    </div>
+""", unsafe_allow_html=True)
+
+# Alerta quando posições diferentes — comparação com contexto
+if pos_a1 and pos_a2 and pos_a1 != pos_a2:
+    cfg1 = POSITION_CONFIG[pos_a1]
+    cfg2 = POSITION_CONFIG[pos_a2]
+    st.info(
+        f"ℹ️ **Posições diferentes:** {cfg1['emoji']} {cfg1['label']} vs {cfg2['emoji']} {cfg2['label']}. "
+        "Os valores absolutos não são diretamente comparáveis — use o radar 'Por Posição' para uma análise justa."
+    )
 
 col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5, col_kpi6 = st.columns(6)
 
@@ -178,15 +214,36 @@ with col_radar:
         'Player Load': 'Player Load'
     }
     
-    maximos_time = df_agrupado[metricas_radar].max()
-    maximos_time = maximos_time.replace(0, 1) 
+    # 🆕 Toggle de modo de normalização
+    modo_radar = st.radio(
+        "Normalizar radar por:",
+        ["🏟️ Máximo do time", "📍 Benchmark da posição"],
+        horizontal=True,
+        help="'Benchmark da posição' avalia cada atleta contra o esperado para sua função tática, não contra o colega.",
+    )
 
-    # CORREÇÃO SEGURA DO RADAR
-    val1_norm = (df_a1[metricas_radar].fillna(0) / maximos_time * 100).fillna(0).tolist()
-    val2_norm = (df_a2[metricas_radar].fillna(0) / maximos_time * 100).fillna(0).tolist()
-    
-    val1_orig = df_a1[metricas_radar].fillna(0).tolist()
-    val2_orig = df_a2[metricas_radar].fillna(0).tolist()
+    if modo_radar == "📍 Benchmark da posição":
+        def _norm_pos(row_data, position, metrics):
+            vals = []
+            for m in metrics:
+                v = float(row_data.get(m, 0) or 0)
+                bench = get_benchmark(position, m)
+                vals.append(min(v / bench["elite"] * 100, 150) if bench and bench["elite"] > 0 else 0)
+            return vals
+
+        val1_norm = _norm_pos(df_a1, pos_a1, metricas_radar)
+        val2_norm = _norm_pos(df_a2, pos_a2, metricas_radar)
+        radial_range = [0, 150]
+        tick_suffix  = "% elite"
+    else:
+        maximos_time = df_agrupado[metricas_radar].max().replace(0, 1)
+        val1_norm = (df_a1[metricas_radar].fillna(0).infer_objects(copy=False) / maximos_time * 100).fillna(0).infer_objects(copy=False).tolist()
+        val2_norm = (df_a2[metricas_radar].fillna(0).infer_objects(copy=False) / maximos_time * 100).fillna(0).infer_objects(copy=False).tolist()
+        radial_range = [0, 100]
+        tick_suffix  = "%"
+        
+    val1_orig = df_a1[metricas_radar].fillna(0).infer_objects(copy=False).tolist()
+    val2_orig = df_a2[metricas_radar].fillna(0).infer_objects(copy=False).tolist()
     
     val1_norm += [val1_norm[0]]
     val2_norm += [val2_norm[0]]
@@ -225,7 +282,7 @@ with col_radar:
     ))
 
     fig_radar.update_layout(
-        polar=dict(radialaxis=dict(visible=True, range=[0, 100], ticksuffix="%")),
+        polar=dict(radialaxis=dict(visible=True, range=radial_range, ticksuffix=tick_suffix)),
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
         height=450, margin=dict(t=30, b=40, l=40, r=40)
@@ -234,40 +291,56 @@ with col_radar:
 
 with col_timeline:
     st.subheader("📈 Corrida de Ritmo (Timeline)")
-    
-    df_min_a1 = df_jogo[df_jogo['Name'] == atleta_1].sort_values('Interval').copy()
-    df_min_a2 = df_jogo[df_jogo['Name'] == atleta_2].sort_values('Interval').copy()
-    
-    # 🔴 CORREÇÃO TIMELINE: Construção segura das métricas para evitar quebra do eixo X
-    df_min_a1['Total_Dist_Acum'] = df_min_a1['Total Distance'].cumsum() if 'Total Distance' in df_min_a1.columns else 0
-    df_min_a2['Total_Dist_Acum'] = df_min_a2['Total Distance'].cumsum() if 'Total Distance' in df_min_a2.columns else 0
-    
-    df_min_a1['V4_Acum'] = df_min_a1['V4 Dist'].cumsum() if 'V4 Dist' in df_min_a1.columns else 0
-    df_min_a2['V4_Acum'] = df_min_a2['V4 Dist'].cumsum() if 'V4 Dist' in df_min_a2.columns else 0
-    
-    col_sprint = 'V5 Dist' if 'V5 Dist' in df_jogo.columns else 'V5 To8 Eff'
-    df_min_a1['V5_Acum'] = df_min_a1[col_sprint].cumsum() if col_sprint in df_min_a1.columns else 0
-    df_min_a2['V5_Acum'] = df_min_a2[col_sprint].cumsum() if col_sprint in df_min_a2.columns else 0
-    
-    # Força (Acc3 + Dec3) alinhada pelo index
-    acc3_a1 = df_min_a1['Acc3 Eff'] if 'Acc3 Eff' in df_min_a1.columns else pd.Series(0, index=df_min_a1.index)
-    dec3_a1 = df_min_a1['Dec3 Eff'] if 'Dec3 Eff' in df_min_a1.columns else pd.Series(0, index=df_min_a1.index)
-    df_min_a1['AccDec'] = acc3_a1 + dec3_a1
 
-    acc3_a2 = df_min_a2['Acc3 Eff'] if 'Acc3 Eff' in df_min_a2.columns else pd.Series(0, index=df_min_a2.index)
-    dec3_a2 = df_min_a2['Dec3 Eff'] if 'Dec3 Eff' in df_min_a2.columns else pd.Series(0, index=df_min_a2.index)
-    df_min_a2['AccDec'] = acc3_a2 + dec3_a2
+    # Timeline sempre usa o jogo completo — independente do filtro de período
+    def preparar_timeline(df_jogo_full, atleta):
+        df = df_jogo_full[df_jogo_full['Name'] == atleta].copy()
+        
+        # Ordena por Período → Interval para garantir sequência correta
+        df = df.sort_values(['Período', 'Interval']).reset_index(drop=True)
+        
+        # Cria minuto contínuo: 2º tempo começa de onde o 1º terminou
+        df['Minuto'] = range(1, len(df) + 1)
 
-    df_min_a1['AccDec_Acum'] = df_min_a1['AccDec'].cumsum()
-    df_min_a2['AccDec_Acum'] = df_min_a2['AccDec'].cumsum()
+        # Linha vertical de separação dos tempos
+        fim_1t = df[df['Período'] == 1]['Minuto'].max() if 1 in df['Período'].values else None
 
-    # --- Criação das Abas (Tabs) ---
-    tab0, tab1, tab2, tab3 = st.tabs(["📏 Distância Total", "⚡ V4 Acumulada", "🚀 Sprints (V5)", "🛑 Força (Acc3 + Dec3)"])
-    
-    def desenhar_grafico_linha(df1, df2, coluna_y, titulo_y):
+        # Acumulados
+        df['Total_Dist_Acum'] = df['Total Distance'].cumsum() if 'Total Distance' in df.columns else 0
+        df['V4_Acum']         = df['V4 Dist'].cumsum()        if 'V4 Dist'        in df.columns else 0
+
+        col_sprint = 'V5 Dist' if 'V5 Dist' in df.columns else 'V5 To8 Eff'
+        df['V5_Acum'] = df[col_sprint].cumsum() if col_sprint in df.columns else 0
+
+        acc = df['Acc3 Eff'] if 'Acc3 Eff' in df.columns else pd.Series(0, index=df.index)
+        dec = df['Dec3 Eff'] if 'Dec3 Eff' in df.columns else pd.Series(0, index=df.index)
+        df['AccDec_Acum'] = (acc + dec).cumsum()
+
+        return df, fim_1t
+
+    df_tl_a1, fim_1t = preparar_timeline(df_jogo, atleta_1)
+    df_tl_a2, _      = preparar_timeline(df_jogo, atleta_2)
+
+    if periodo_sel != "Ambos":
+        fim_1t = None
+
+    def desenhar_grafico_linha(df1, df2, coluna_y, titulo_y, fim_1t):
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df1['Interval'], y=df1[coluna_y], mode='lines', name=atleta_1, line=dict(color='#EF5350', width=3)))
-        fig.add_trace(go.Scatter(x=df2['Interval'], y=df2[coluna_y], mode='lines', name=atleta_2, line=dict(color='#42A5F5', width=3)))
+        fig.add_trace(go.Scatter(
+            x=df1['Minuto'], y=df1[coluna_y], mode='lines',
+            name=atleta_1, line=dict(color='#EF5350', width=3)
+        ))
+        fig.add_trace(go.Scatter(
+            x=df2['Minuto'], y=df2[coluna_y], mode='lines',
+            name=atleta_2, line=dict(color='#42A5F5', width=3)
+        ))
+        # Linha vertical separando 1º e 2º tempo
+        if fim_1t:
+            fig.add_vline(
+                x=fim_1t, line_dash="dash", line_color="rgba(255,255,255,0.3)",
+                annotation_text="Intervalo", annotation_position="top",
+                annotation_font=dict(size=11, color="rgba(255,255,255,0.5)")
+            )
         fig.update_layout(
             height=380,
             xaxis_title="Minuto de Jogo", yaxis_title=titulo_y,
@@ -276,14 +349,13 @@ with col_timeline:
         )
         return fig
 
+    tab0, tab1, tab2, tab3 = st.tabs(["📏 Distância Total", "⚡ V4 Acumulada", "🚀 Sprints (V5)", "🛑 Força (Acc3 + Dec3)"])
+
     with tab0:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'Total_Dist_Acum', 'Distância Total Acumulada (m)'), width='stretch', key="grafico_tab0")
-        
+        st.plotly_chart(desenhar_grafico_linha(df_tl_a1, df_tl_a2, 'Total_Dist_Acum', 'Distância Total Acumulada (m)', fim_1t), width='stretch', key="grafico_tab0")
     with tab1:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V4_Acum', 'Volume de V4 (m)'), width='stretch', key="grafico_tab1")
-        
+        st.plotly_chart(desenhar_grafico_linha(df_tl_a1, df_tl_a2, 'V4_Acum', 'Volume de V4 (m)', fim_1t), width='stretch', key="grafico_tab1")
     with tab2:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'V5_Acum', 'Volume de Sprint'), width='stretch', key="grafico_tab2")
-        
+        st.plotly_chart(desenhar_grafico_linha(df_tl_a1, df_tl_a2, 'V5_Acum', 'Volume de Sprint', fim_1t), width='stretch', key="grafico_tab2")
     with tab3:
-        st.plotly_chart(desenhar_grafico_linha(df_min_a1, df_min_a2, 'AccDec_Acum', 'Ações de Acc/Dec'), width='stretch', key="grafico_tab3")
+        st.plotly_chart(desenhar_grafico_linha(df_tl_a1, df_tl_a2, 'AccDec_Acum', 'Ações de Acc/Dec', fim_1t), width='stretch', key="grafico_tab3")

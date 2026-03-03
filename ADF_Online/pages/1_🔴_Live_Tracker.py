@@ -319,7 +319,7 @@ with col_dir:
                     height=480, hovermode='x unified', margin=dict(l=20, r=20, t=50, b=80) 
                 )
 
-                st.plotly_chart(fig, use_container_width=True, key=f"graf_{periodo}_{i}_{atleta}")
+                st.plotly_chart(fig, width='stretch', key=f"graf_{periodo}_{i}_{atleta}")
 
     # Inicializa o fragmento passando os parâmetros da coluna Esquerda (Filtros)
     painel_tracker_ao_vivo(

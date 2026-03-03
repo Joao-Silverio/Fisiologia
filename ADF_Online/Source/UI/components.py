@@ -103,7 +103,7 @@ def renderizar_menu_superior(pagina_atual="Home"):
             }}
 
             /* 5. A mágica para capturar a primeira linha de colunas da página (Nosso Menu) */
-            div[data-testid="stVerticalBlock"] > div:first-child [data-testid="stHorizontalBlock"] {{
+            div[data-testid="stVerticalBlock"] > div:first-child(-n+3) [data-testid="stHorizontalBlock"]:first-of-type {{
                 background: rgba(15, 23, 42, 0.90) !important;
                 border: 1px solid #334155 !important; 
                 border-radius: 12px !important;
