@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np 
 import warnings
 import plotly.express as px
 import plotly.graph_objects as go
@@ -165,8 +166,8 @@ def pagina_individual():
 
     # ABAS
     st.markdown("### 🧭 Estrutura de Análise Jogo a Jogo")
-    aba_timeline, aba_comparativo, aba_clusters, aba_insights = st.tabs([
-        "📈 Linha do tempo", "⚔️ Comparativo", "🏃 Clusters Intensidade", "💡 Insights"
+    aba_timeline, aba_comparativo, aba_clusters, aba_insights, aba_perfil = st.tabs([
+        "📈 Linha do tempo", "⚔️ Comparativo", "🏃 Clusters Intensidade", "💡 Insights", "📊 Perfil Estatístico"
     ])
 
     # Variáveis compartilhadas entre abas e PDF
@@ -350,21 +351,161 @@ def pagina_individual():
         else:
             st.write("Sem base histórica suficiente para gerar insights comparativos.")
 
-    # 🆕 BOTÃO DE EXPORT PDF — fora das abas, sempre visível
+    # ABA 5: PERFIL ESTATÍSTICO
+    with aba_perfil:
+        col_perc, col_corr = st.columns(2)
+        
+        # ----- PERCENTIL POR POSIÇÃO -----
+        with col_perc:
+            st.markdown("#### 🏅 Percentil vs Posição")
+            from Source.Dados.positions import get_position, POSITION_CONFIG
+            
+            posicao_atl = get_position(atleta_selecionado)
+            metricas_perc = ['Total Distance', 'Player Load', 'HIA', 'V4 Dist', 'V5 Dist']
+            
+            if posicao_atl:
+                # Pega todos os atletas da mesma posição no histórico
+                atletas_mesma_pos = [n for n in df_completo['Name'].unique() if get_position(n) == posicao_atl]
+                df_pos_grupo = df_completo[df_completo['Name'].isin(atletas_mesma_pos)]
+                df_pos_agg   = df_pos_grupo.groupby(['Name','Data'])[[m for m in metricas_perc if m in df_completo.columns]].sum().reset_index()
+                
+                vals_atleta_p, percentis, labels_p = [], [], []
+                for m in metricas_perc:
+                    if m not in df_pos_agg.columns: continue
+                    val_atual = df_jogo_atleta[m].sum() if m in df_jogo_atleta.columns else 0
+                    todos_vals = df_pos_agg[m].dropna().values
+                    if len(todos_vals) > 0:
+                        pct = (todos_vals < val_atual).mean() * 100
+                        percentis.append(pct)
+                        vals_atleta_p.append(val_atual)
+                        labels_p.append(m.replace('Total Distance','Distância').replace('Player Load','P.Load'))
+                
+                if percentis:
+                    cores_perc = ['#22C55E' if p >= 75 else '#F59E0B' if p >= 50 else '#EF4444' for p in percentis]
+                    fig_perc = go.Figure(go.Bar(
+                        x=percentis, y=labels_p,
+                        orientation='h',
+                        marker_color=cores_perc,
+                        text=[f"P{p:.0f}  ({v:.0f})" for p, v in zip(percentis, vals_atleta_p)],
+                        textposition='inside',
+                        hovertemplate="<b>%{y}</b><br>Percentil: %{x:.0f}<extra></extra>"
+                    ))
+                    cfg_pos = POSITION_CONFIG[posicao_atl]
+                    fig_perc.add_vline(x=50, line_dash="dash", line_color="rgba(255,255,255,0.3)",
+                                    annotation_text="Mediana", annotation_position="top")
+                    fig_perc.update_layout(
+                        height=320, xaxis=dict(range=[0,100], title="Percentil (%)"),
+                        title=f"{cfg_pos['emoji']} vs {cfg_pos['label']}s",
+                        template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=40, b=10)
+                    )
+                    st.plotly_chart(fig_perc, width='stretch')
+            else:
+                st.info("Posição não mapeada — adicione em positions.py")
+        
+        # ----- CORRELAÇÃO CARGA vs PERFORMANCE -----
+        with col_corr:
+            st.markdown("#### 🔗 Carga vs Performance")
+            
+            df_corr = df_atleta_total.groupby(['Data','Data_Display']).agg(
+                Player_Load=('Player Load', 'sum'),
+                HIA=('HIA', 'sum'),
+                Distancia=('Total Distance', 'sum')
+            ).reset_index()
+            
+            if len(df_corr) >= 3:
+                # Destaca jogo atual
+                df_corr['is_atual'] = df_corr['Data'] == jogo_destaque_data
+                
+                fig_corr = px.scatter(
+                    df_corr, x='Player_Load', y='HIA',
+                    size='Distancia', color='is_atual',
+                    color_discrete_map={True: '#EF4444', False: '#60A5FA'},
+                    text='Data_Display',
+                    hover_data=['Distancia'],
+                    labels={'Player_Load': 'Player Load', 'HIA': 'HIA Total',
+                            'is_atual': 'Jogo Atual'}
+                )
+                fig_corr.update_traces(textposition='top center', textfont_size=8)
+                
+                # Linha de tendência
+                if len(df_corr) >= 4:
+                    z = np.polyfit(df_corr['Player_Load'], df_corr['HIA'], 1)
+                    p = np.poly1d(z)
+                    x_line = np.linspace(df_corr['Player_Load'].min(), df_corr['Player_Load'].max(), 50)
+                    fig_corr.add_trace(go.Scatter(
+                        x=x_line, y=p(x_line), mode='lines',
+                        name='Tendência', line=dict(color='rgba(255,255,255,0.3)', dash='dot', width=1)
+                    ))
+                
+                fig_corr.update_layout(
+                    height=320, template='plotly_dark',
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    margin=dict(t=10, b=10), showlegend=False
+                )
+                st.plotly_chart(fig_corr, width='stretch')
+            else:
+                st.info("Mínimo de 3 jogos para o gráfico de correlação.")
+        
+        # ----- DISTRIBUIÇÃO (VIOLIN) -----
+        st.markdown("#### 🎻 Distribuição Histórica por Métrica")
+        
+        metricas_violin = ['Total Distance', 'Player Load', 'HIA', 'V4 Dist']
+        metricas_violin = [m for m in metricas_violin if m in df_atleta_total.columns]
+        
+        df_violin = df_atleta_total.groupby('Data')[metricas_violin].sum().reset_index()
+        
+        if len(df_violin) >= 4:
+            metrica_viol = st.radio("Métrica:", metricas_violin, horizontal=True, key="rad_violin")
+            val_atual_viol = df_jogo_atleta[metrica_viol].sum() if metrica_viol in df_jogo_atleta.columns else 0
+            
+            fig_viol = go.Figure()
+            fig_viol.add_trace(go.Violin(
+                y=df_violin[metrica_viol],
+                box_visible=True, meanline_visible=True,
+                fillcolor='rgba(96,165,250,0.3)',
+                line_color='#60A5FA', name='Histórico',
+                points='all', pointpos=0,
+                marker=dict(color='#60A5FA', size=6, opacity=0.6)
+            ))
+            
+            # Marca o jogo atual
+            fig_viol.add_hline(
+                y=val_atual_viol, line_dash="solid", line_color="#EF4444", line_width=2,
+                annotation_text=f"  Jogo atual: {val_atual_viol:.0f}",
+                annotation_font=dict(color="#EF4444", size=12),
+                annotation_position="right"
+            )
+            
+            fig_viol.update_layout(
+                height=320, template='plotly_dark',
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                yaxis_title=metrica_viol, showlegend=False,
+                margin=dict(t=10, b=10, r=120)
+            )
+            st.plotly_chart(fig_viol, width='stretch')
+        else:
+            st.info("Mínimo de 4 jogos para o gráfico de distribuição.")
+
+    # =====================================================================
+    # 🟢 CORREÇÃO: Totalmente alinhado à esquerda (fora do 'with aba_perfil')
+    # e sem o st.button encapsulando o st.download_button
+    # =====================================================================
     st.markdown("---")
     _, col_pdf = st.columns([5, 1])
     with col_pdf:
-        if st.button("📄 Exportar PDF", type="secondary", key="btn_export_pdf"):
-            pdf_buffer = gerar_pdf_atleta(
-                atleta_selecionado, jogo_destaque_display, periodo_selecionado,
-                df_comp, df_evolucao, metrica_grafico
-            )
-            st.download_button(
-                label="⬇️ Baixar PDF",
-                data=pdf_buffer,
-                file_name=f"relatorio_{atleta_selecionado.replace(' ', '_')}_{pd.Timestamp.now().strftime('%Y%m%d')}.pdf",
-                mime="application/pdf",
-                key="btn_download_pdf"
-            )
+        # Gera o PDF diretamente para colocar no botão
+        pdf_buffer = gerar_pdf_atleta(
+            atleta_selecionado, jogo_destaque_display, periodo_selecionado,
+            df_comp, df_evolucao, metrica_grafico
+        )
+        
+        st.download_button(
+            label="📄 Exportar PDF",
+            data=pdf_buffer,
+            file_name=f"relatorio_{atleta_selecionado.replace(' ', '_')}_{pd.Timestamp.now().strftime('%Y%m%d')}.pdf",
+            mime="application/pdf",
+            key="btn_download_pdf"
+        )
 
 pagina_individual()

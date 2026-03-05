@@ -214,10 +214,120 @@ with col_dir:
         )
         fig.update_traces(hovertemplate='%{y:.2f} ações', selector=dict(type='bar'))
 
-        st.plotly_chart(fig, width='stretch', key=f"hia_stacked_{periodo}_{atleta}")
-        
-        
+        fig.update_traces(hovertemplate='%{y:.2f} ações', selector=dict(type='bar'))
+
+        # =====================================================================
+        # 🆕 CRIANDO AS ABAS E DISTRIBUINDO OS GRÁFICOS
+        # =====================================================================
+        abas_hia = st.tabs(["📊 HIA Empilhado", "🔵 Dispersão de Carga", "📈 Evolução (Banda)"])
+
+        # ---------------------------------------------------------------------
+        # ABA 1: HIA Empilhado (O que você já tinha)
+        # ---------------------------------------------------------------------
+        with abas_hia[0]:
+            st.plotly_chart(fig, width='stretch', key=f"hia_stacked_{periodo}_{atleta}_{jogo_alvo}")
+
+        # ---------------------------------------------------------------------
+        # ABA 2: Scatter (Dispersão: Carga vs Minutagem)
+        # ---------------------------------------------------------------------
+        with abas_hia[1]:
+            st.markdown("#### 🔵 Dispersão: Carga vs Minutagem por Atleta")
+            
+            # Trocado df_completo por df_base e filtrado pelo jogo alvo do fragmento
+            df_scatter = df_base[df_base['Data'] == jogo_alvo].copy()
+            
+            if not df_scatter.empty and 'Player Load' in df_scatter.columns:
+                # Trocado Min_Num por Interval
+                df_scatter_agg = df_scatter.groupby('Name').agg(
+                    Distancia=('Total Distance', 'sum') if 'Total Distance' in df_scatter.columns else ('Interval', 'count'),
+                    Player_Load=('Player Load', 'sum'),
+                    HIA=('HIA', 'sum') if 'HIA' in df_scatter.columns else ('Interval', 'count'),
+                    Minutos=('Interval', 'max')
+                ).reset_index()
+                
+                df_scatter_agg['Carga_por_min'] = df_scatter_agg['Player_Load'] / df_scatter_agg['Minutos'].clip(lower=1)
+
+                fig_scatter = px.scatter(
+                    df_scatter_agg, x='Minutos', y='Player_Load',
+                    size='HIA', color='Carga_por_min',
+                    text='Name', hover_data=['Distancia', 'HIA'],
+                    color_continuous_scale='RdYlGn',
+                    labels={'Player_Load': 'Player Load Total', 'Minutos': 'Minutos Jogados', 'Carga_por_min': 'Carga/min'},
+                    size_max=40
+                )
+                fig_scatter.update_traces(textposition='top center', textfont_size=10)
+                fig_scatter.update_layout(
+                    height=420, template='plotly_dark',
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    margin=dict(t=10, b=10)
+                )
+                st.plotly_chart(fig_scatter, width='stretch', key=f"scatter_carga_{periodo}_{jogo_alvo}")
+            else:
+                st.info("Dados de carga insuficientes para este jogo.")
+
+        # ---------------------------------------------------------------------
+        # ABA 3: Linha com Banda de Confiança
+        # ---------------------------------------------------------------------
+        with abas_hia[2]:
+            st.markdown("#### 📈 Evolução com Banda de Variação (±1 DP)")
+
+            # Colunas para não empilhar os seletores
+            c_atl, c_met = st.columns(2)
+            with c_atl:
+                atleta_linha = st.selectbox("Atleta:", sorted(df_base['Name'].dropna().unique()), key=f"sel_linha_{periodo}")
+            with c_met:
+                metrica_linha = st.radio("Métrica:", ['Total Distance', 'Player Load', 'HIA'], horizontal=True, key=f"rad_linha_{periodo}")
+
+            if metrica_linha in df_base.columns:
+                # Trocado df_completo por df_base
+                df_linha = df_base[df_base['Name'] == atleta_linha].groupby(['Data','Data_Display'])[metrica_linha].sum().reset_index().sort_values('Data')
+
+                if len(df_linha) >= 3:
+                    media_l  = df_linha[metrica_linha].mean()
+                    dp_l     = df_linha[metrica_linha].std()
+                    
+                    fig_banda = go.Figure()
+                    
+                    # Banda ±1 DP
+                    fig_banda.add_trace(go.Scatter(
+                        x=df_linha['Data_Display'], y=[media_l + dp_l] * len(df_linha),
+                        mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'
+                    ))
+                    fig_banda.add_trace(go.Scatter(
+                        x=df_linha['Data_Display'], y=[media_l - dp_l] * len(df_linha),
+                        mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(96,165,250,0.1)',
+                        name='±1 Desvio Padrão', hoverinfo='skip'
+                    ))
+                    
+                    # Linha principal
+                    cores_pts = ['#EF4444' if abs(v - media_l) > dp_l else '#22C55E' for v in df_linha[metrica_linha]]
+                    fig_banda.add_trace(go.Scatter(
+                        x=df_linha['Data_Display'], y=df_linha[metrica_linha],
+                        mode='lines+markers', name=atleta_linha,
+                        line=dict(color='#60A5FA', width=2),
+                        marker=dict(size=9, color=cores_pts),
+                        hovertemplate="<b>%{x}</b><br>Valor: %{y:.1f}<extra></extra>"
+                    ))
+                    
+                    # Linha da média
+                    fig_banda.add_hline(y=media_l, line_dash="dash", line_color="rgba(255,255,255,0.3)",
+                                        annotation_text=f"Média: {media_l:.1f}", annotation_position="top left")
+                    
+                    fig_banda.update_layout(
+                        height=380, template='plotly_dark',
+                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                        xaxis_tickangle=-30, margin=dict(t=10, b=60),
+                        legend=dict(orientation="h", y=-0.35, x=0.5, xanchor="center")
+                    )
+                    st.plotly_chart(fig_banda, width='stretch', key=f"banda_{periodo}_{atleta_linha}_{metrica_linha}")
+                else:
+                    st.info("Mínimo de 3 jogos para exibir a banda de variação.")
+            else:
+                st.warning("Métrica selecionada não encontrada nos dados.")
+
+    # =====================================================================
     # Inicia o bloco fragmentado
+    # =====================================================================
     painel_hia_ao_vivo(
         campeonatos_selecionados, 
         jogo_selecionado, 

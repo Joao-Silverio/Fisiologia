@@ -17,8 +17,6 @@ if 'df_global' not in st.session_state or st.session_state['df_global'].empty:
     st.warning("⚠️ Carregue os dados na página principal (Home) primeiro.")
     st.stop()
 
-modo_apres = ui.renderizar_toggle_apresentacao()
-
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
 
@@ -126,43 +124,6 @@ with col_dir:
     # =====================================================================
     # VISÃO GERAL DO ELENCO (RADAR DE FADIGA)
     # =====================================================================
-    with st.expander("👁️ Ver Radar do Elenco (Jogo Atual)", expanded=False):
-        df_equipe_jogo = df_base_estatico[(df_base_estatico['Data'] == jogo_selecionado) & (df_base_estatico['Período'] == periodo_sel)].copy()
-        
-        if not df_equipe_jogo.empty:
-            dados_radar = []
-            for atl in df_equipe_jogo['Name'].unique():
-                df_a = df_equipe_jogo[df_equipe_jogo['Name'] == atl].sort_values('Interval')
-                if not df_a.empty:
-                    load_total = df_a['Player Load'].sum() if 'Player Load' in df_a.columns else 0
-                    intensidade_5m = (df_a['Total Distance'].tail(5).sum() / 5) if 'Total Distance' in df_a.columns else 0
-                    
-                    cor_ponto = visual.CORES['ok_prontidao']
-                    if load_total > 400 and intensidade_5m < 70: 
-                        cor_ponto = visual.CORES['alerta_fadiga']
-                    elif load_total > 400 and intensidade_5m > 110:
-                        cor_ponto = visual.CORES['aviso_carga']
-                        
-                    dados_radar.append({'Atleta': atl, 'Load': load_total, 'Intensidade': intensidade_5m, 'Cor': cor_ponto})
-            
-            df_radar = pd.DataFrame(dados_radar)
-            fig_radar = go.Figure()
-            fig_radar.add_trace(go.Scatter(
-                x=df_radar['Load'], y=df_radar['Intensidade'], mode='markers+text',
-                text=df_radar['Atleta'], textposition="top center",
-                marker=dict(size=14, color=df_radar['Cor'], line=dict(width=1, color='white')),
-                hovertemplate="<b>%{text}</b><br>Load: %{x:.0f}<br>m/min (5m): %{y:.1f}<extra></extra>"
-            ))
-            fig_radar.update_layout(
-                template='plotly_dark', plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                title="Radar Coletivo: Volume x Ritmo Agudo",
-                xaxis_title="Volume Total (Load Acumulado)", yaxis_title="Intensidade (m/min - Últimos 5m)",
-                height=350, margin=dict(l=20, r=20, t=40, b=20)
-            )
-            st.plotly_chart(fig_radar, width='stretch')
-        else:
-            st.info("Aguardando dados da equipe para o jogo selecionado...")
-
     # CSS Ajustado: Removemos o margin-top negativo das abas para não quebrar as abas aninhadas
     st.markdown("""
         <style>
@@ -218,9 +179,10 @@ with col_dir:
         df_historico_base = df[df[coluna_jogo] != jogo_alvo].copy()
         df_atual_base = df[df[coluna_jogo] == jogo_alvo].sort_values(coluna_minuto)
         
-        # --- ABAS PRINCIPAIS (MÉTRICAS) ---
+       # --- ABAS PRINCIPAIS (MÉTRICAS) ---
         opcoes_metricas = list(config.METRICAS_CONFIG.keys())
-        abas = st.tabs(opcoes_metricas)
+        # 1. O radar foi removido daqui
+        abas = st.tabs(opcoes_metricas) 
         
         for i, metrica in enumerate(opcoes_metricas):
             with abas[i]:
@@ -234,7 +196,7 @@ with col_dir:
                 ml = executar_ml_ao_vivo(df_historico, df_atual_corte, df_base, coluna_distancia, coluna_acumulada, coluna_minuto, coluna_jogo, jogo_alvo, periodo, minuto_projecao_ate, metrica, atleta, DIRETORIO_ATUAL)
 
                 # =====================================================================
-                # RENDERIZANDO OS KPIs (AGORA NA POSIÇÃO CORRETA, ACIMA DOS GRÁFICOS)
+                # RENDERIZANDO OS KPIs
                 # =====================================================================
                 carga_atual = df_atual_corte[coluna_acumulada].iloc[-1] if not df_atual_corte.empty else 0
                 pl_atual = df_atual_corte['Player Load Acumulada'].iloc[-1] if 'Player Load Acumulada' in df_atual_corte.columns and not df_atual_corte.empty else 0
@@ -260,7 +222,7 @@ with col_dir:
 
                 cor_delta = "normal" if metrica in ["V4 Dist", "HIA", "Total Distance"] else "inverse"
 
-                # 🆕 ALERTA DE FADIGA — Calcula delta de cada atleta no jogo atual
+                # ALERTA DE FADIGA
                 alertas_fadiga = []
                 for nome_atleta in df_base[df_base['Data'] == jogo_alvo]['Name'].unique():
                     df_hist_a = df_base[(df_base['Name'] == nome_atleta) & 
@@ -285,17 +247,23 @@ with col_dir:
 
                 if alertas_fadiga:
                     with st.expander(f"⚠️ {len(alertas_fadiga)} atleta(s) fora do padrão — clique para ver", expanded=True):
-                        cols_alerta = st.columns(len(alertas_fadiga))
-                        for col_a, (nome_a, delta_a, tipo_a) in zip(cols_alerta, alertas_fadiga):
-                            cor_a = visual.CORES["alerta_fadiga"] if delta_a > 0 else visual.CORES["aviso_carga"]
-                            col_a.markdown(f"""
-                                <div style='border:2px solid {cor_a}; border-radius:8px; padding:10px; text-align:center;
-                                            background:{cor_a}22; animation: pulse 2s infinite;'>
-                                    <b style='color:{cor_a}'>{tipo_a}</b><br>
-                                    <span style='font-size:0.9rem'>{nome_a}</span><br>
-                                    <b style='color:{cor_a}; font-size:1.2rem'>{delta_a:+.1f}%</b>
-                                </div>
-                            """, unsafe_allow_html=True)
+                        COLS_POR_LINHA = 5
+                        for linha_idx in range(0, len(alertas_fadiga), COLS_POR_LINHA):
+                            grupo = alertas_fadiga[linha_idx : linha_idx + COLS_POR_LINHA]
+                            cols_alerta = st.columns(COLS_POR_LINHA)
+                            for j, (nome_a, delta_a, tipo_a) in enumerate(grupo):
+                                cor_a = visual.CORES["alerta_fadiga"] if delta_a > 0 else visual.CORES["aviso_carga"]
+                                cols_alerta[j].markdown(f"""
+                                    <div style='border:2px solid {cor_a}; border-radius:8px; padding:10px;
+                                                text-align:center; background:{cor_a}22;
+                                                animation: pulse 2s infinite; margin-bottom:6px;'>
+                                        <b style='color:{cor_a}'>{tipo_a}</b><br>
+                                        <span style='font-size:0.85rem'>{nome_a}</span><br>
+                                        <b style='color:{cor_a}; font-size:1.1rem'>{delta_a:+.1f}%</b>
+                                    </div>
+                                """, unsafe_allow_html=True)
+                            for j in range(len(grupo), COLS_POR_LINHA):
+                                cols_alerta[j].empty()
 
                 st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
                 k0, k1, k2, k3, k4, k5, k6 = st.columns(7, gap="small")
@@ -307,7 +275,6 @@ with col_dir:
                 with k5: renderizar_kpi_mini("Load Atual", f"{pl_atual:.0f}", delta=fmt_pct(ml['delta_pl_pct']), delta_color="inverse", cor_borda=visual.CORES["aviso_carga"], icone="🔋")
                 with k6: renderizar_kpi_mini("Pico (5m)", f"{percentual_do_limite:.0f}%", delta=f"{val_recorde:.0f}{unidade}", delta_color="off", cor_borda=visual.CORES["alerta_fadiga"], icone="🔥")
 
-                # ESPAÇAMENTO RESPIRÁVEL ENTRE KPIs E GRÁFICOS
                 st.markdown("<div style='margin-top: 20px; margin-bottom: 5px;'></div>", unsafe_allow_html=True)
 
                 # =====================================================================
@@ -315,7 +282,7 @@ with col_dir:
                 # =====================================================================
                 hover_formato = "%{y:.2f}" + unidade if metrica in ["Total Distance", "V4 Dist", "V5 Dist"] else "%{y:.0f}" + unidade
 
-                # 1. Gráfico de Acumulado (Projeção)
+                # Gráfico Acumulado
                 fig = go.Figure()
                 if not df_historico.empty:
                     jogos_historicos = df_historico[coluna_jogo].unique()
@@ -338,15 +305,7 @@ with col_dir:
                 fig.update_xaxes(tickmode='linear', dtick=1, range=[0, minuto_projecao_ate + 2], tickfont=dict(size=10))
                 fig.update_layout(template='plotly_dark', plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', title=f"{cfg['titulo_grafico']} - {atleta} ({periodo}º T)", xaxis_title='Minutos', yaxis_title=metrica, legend=dict(bgcolor='rgba(0,0,0,0)', orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5), height=400, hovermode='x unified', margin=dict(l=20, r=20, t=40, b=20))
 
-                # 2. Gráfico de Média Móvel
-                fig_movel = go.Figure()
-                if not df_atual.empty and coluna_distancia in df_atual.columns:
-                    df_temp = df_atual.copy()
-                    df_temp['Movel_3m'] = df_temp[coluna_distancia].rolling(window=3, min_periods=1).mean()
-                    fig_movel.add_trace(go.Scatter(x=df_temp[coluna_minuto], y=df_temp['Movel_3m'], mode='lines', name='Ritmo Médio (3m)', line=dict(color=visual.CORES['secundaria'], width=3, shape='spline'), fill='tozeroy', fillcolor='rgba(96, 165, 250, 0.1)', hovertemplate="Min: %{x}<br>Média (3m): %{y:.1f}<extra></extra>"))
-                fig_movel.update_layout(template='plotly_dark', plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', title=f"Média Móvel de Ritmo (3 min) - {atleta}", xaxis_title="Minutos", yaxis_title=f"{metrica} / min", height=400, margin=dict(l=20, r=20, t=40, b=20), hovermode='x unified')
-
-                # 3. Gráfico de Densidade
+                # Gráfico Densidade
                 fig_dens = go.Figure()
                 if not df_atual.empty and coluna_distancia in df_atual.columns:
                     cor_barra = visual.CORES['alerta_fadiga'] if metrica in ["V4 Dist", "V5 Dist", "HIA"] else visual.CORES['secundaria']
@@ -356,9 +315,144 @@ with col_dir:
                 # =====================================================================
                 # EXIBIÇÃO: ABAS DOS GRÁFICOS (EMBAIXO DOS KPIs)
                 # =====================================================================
-                abas_graficos = st.tabs(["📈 Acumulado (Projeção)", "🌊 Ritmo (Média Móvel)", "📊 Densidade (Esforços)"])
-                with abas_graficos[0]: st.plotly_chart(fig, width='stretch', key=f"graf_acum_{periodo}_{i}_{atleta}")
-                with abas_graficos[1]: st.plotly_chart(fig_movel, width='stretch', key=f"graf_movel_{periodo}_{i}_{atleta}")
-                with abas_graficos[2]: st.plotly_chart(fig_dens, width='stretch', key=f"graf_dens_{periodo}_{i}_{atleta}")
+                abas_graficos = st.tabs([
+                    "📈 Acumulado (Projeção)",
+                    "📉 Curva de Fadiga",
+                    "📊 Densidade (Esforços)",
+                    "🚦 Zona de Risco",
+                    "👥 Radar do Elenco"  # 2. ABA ADICIONADA AQUI NAS OPÇÕES
+                ])
+
+                with abas_graficos[0]:
+                    st.plotly_chart(fig, width='stretch', key=f"graf_acum_{periodo}_{i}_{atleta}")
+
+                with abas_graficos[1]:
+                    if not df_atual_base.empty and coluna_distancia in df_atual_base.columns:
+                        df_ritmo = df_atual_base.copy()
+                        df_ritmo['Ritmo_min']  = df_ritmo[coluna_distancia]
+                        df_ritmo['Ritmo_suav'] = df_ritmo['Ritmo_min'].rolling(3, min_periods=1).mean()
+
+                        ritmo_hist = df_historico.groupby(coluna_minuto)[coluna_distancia].mean().reset_index()
+                        ritmo_hist.columns = [coluna_minuto, 'Ritmo_hist']
+                        ritmo_hist['Ritmo_hist_suav'] = ritmo_hist['Ritmo_hist'].rolling(3, min_periods=1).mean()
+
+                        fig_fadiga = go.Figure()
+                        fig_fadiga.add_trace(go.Scatter(x=ritmo_hist[coluna_minuto], y=ritmo_hist['Ritmo_hist_suav'], mode='lines', name='Média Histórica', line=dict(color='rgba(96,165,250,0.5)', width=2, dash='dot')))
+                        fig_fadiga.add_trace(go.Scatter(x=df_ritmo[coluna_minuto], y=df_ritmo['Ritmo_suav'], mode='lines', name='Ritmo Atual', line=dict(color='#00E676', width=3), fill='tonexty', fillcolor='rgba(0,230,118,0.08)'))
+
+                        df_ritmo['queda']       = df_ritmo['Ritmo_suav'].diff() < 0
+                        df_ritmo['queda_consec'] = df_ritmo['queda'].rolling(5, min_periods=5).sum()
+                        inicio_fadiga = df_ritmo[df_ritmo['queda_consec'] == 5][coluna_minuto].min()
+                        if pd.notna(inicio_fadiga):
+                            fig_fadiga.add_vline(x=int(inicio_fadiga) - 4, line_dash="dash", line_color="#EF4444", annotation_text=f"⚠️ Queda desde min {int(inicio_fadiga)-4}", annotation_font=dict(color="#EF4444", size=11))
+
+                        fig_fadiga.update_layout(height=400, xaxis_title="Minuto", yaxis_title="m/min", template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', hovermode='x unified', margin=dict(l=20, r=20, t=40, b=60), legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center"))
+                        st.plotly_chart(fig_fadiga, width='stretch', key=f"graf_fadiga_{periodo}_{i}_{atleta}")
+                    else:
+                        st.info("Sem dados suficientes para a curva de fadiga.")
+
+                with abas_graficos[2]:
+                    st.plotly_chart(fig_dens, width='stretch', key=f"graf_dens_{periodo}_{i}_{atleta}")
+
+                with abas_graficos[3]:
+                    pl_corte = df_atual_corte['Player Load Acumulada'].iloc[-1] if 'Player Load Acumulada' in df_atual_corte.columns and not df_atual_corte.empty else 0
+                    df_hist_pl = df_historico_base.copy()
+                    if not df_hist_pl.empty and 'Player Load' in df_hist_pl.columns:
+                        pl_max_hist   = df_hist_pl.groupby(coluna_jogo)['Player Load'].sum().max()
+                        pl_media_hist = df_hist_pl.groupby(coluna_jogo)['Player Load'].sum().mean()
+                    else:
+                        pl_max_hist   = max(pl_corte * 1.2, 1)
+                        pl_media_hist = pl_corte
+
+                    pct_pl = min((pl_corte / pl_max_hist * 100), 100) if pl_max_hist > 0 else 0
+                    cor_pl = "#22C55E" if pct_pl < 70 else "#F59E0B" if pct_pl < 90 else "#EF4444"
+
+                    col_g, col_info = st.columns([1, 1])
+
+                    with col_g:
+                        fig_zona = go.Figure(go.Indicator(
+                            mode="gauge+number+delta", value=pl_corte, number={'font': {'size': 28, 'color': cor_pl}},
+                            delta={'reference': pl_media_hist, 'valueformat': '.0f', 'font': {'size': 13}},
+                            gauge={'axis': {'range': [0, pl_max_hist], 'tickwidth': 1, 'tickcolor': "#94A3B8"}, 'bar': {'color': cor_pl}, 'bgcolor': "rgba(0,0,0,0)", 'borderwidth': 0, 'steps': [{'range': [0, pl_max_hist * 0.70], 'color': 'rgba(34,197,94,0.12)'}, {'range': [pl_max_hist * 0.70, pl_max_hist * 0.90], 'color': 'rgba(245,158,11,0.12)'}, {'range': [pl_max_hist * 0.90, pl_max_hist], 'color': 'rgba(239,68,68,0.12)'}], 'threshold': {'line': {'color': "#EF4444", 'width': 2}, 'thickness': 0.75, 'value': pl_max_hist * 0.90}},
+                            title={'text': f"Player Load — {atleta}<br><span style='font-size:0.75em;color:#94A3B8'>Máx: {pl_max_hist:.0f} | Média: {pl_media_hist:.0f}</span>", 'font': {'size': 12}}
+                        ))
+                        fig_zona.update_layout(height=320, margin=dict(t=60, b=10, l=20, r=20), paper_bgcolor='rgba(0,0,0,0)', font_color='white')
+                        st.plotly_chart(fig_zona, width='stretch', key=f"graf_zona_{periodo}_{i}_{atleta}")
+
+                    # INFO CORRIGIDO PRA DENTRO DO MESMO CONTEXTO
+                    with col_info:
+                        st.markdown("##### Referências")
+                        st.metric("Player Load Atual", f"{pl_corte:.0f}", delta=f"{pl_corte - pl_media_hist:+.0f} vs média")
+                        st.metric("Máximo Histórico",  f"{pl_max_hist:.0f}")
+                        st.metric("% do Máximo",       f"{pct_pl:.0f}%")
+                        st.markdown("---")
+                        if pct_pl < 70:
+                            st.success("🟢 **Zona Segura** — Carga dentro do esperado")
+                        elif pct_pl < 90:
+                            st.warning("🟡 **Zona de Atenção** — Próximo ao limite habitual")
+                        else:
+                            st.error("🔴 **Zona de Risco** — Acima de 90$ do máximo histórico")
+
+                # 3. CONTEÚDO DO RADAR MOVIDO PARA A 5ª ABA INTERNA
+                with abas_graficos[4]:
+                    st.markdown("#### 👥 Radar Coletivo — Volume × Ritmo Agudo")
+
+                    df_equipe_jogo = df_base[
+                        (df_base['Data'] == jogo_alvo) &
+                        (df_base['Período'] == periodo)
+                    ].copy()
+
+                    if not df_equipe_jogo.empty:
+                        dados_radar = []
+                        for atl in df_equipe_jogo['Name'].unique():
+                            df_a = df_equipe_jogo[df_equipe_jogo['Name'] == atl].sort_values(coluna_minuto)
+                            if not df_a.empty:
+                                load_total     = df_a['Player Load'].sum() if 'Player Load' in df_a.columns else 0
+                                intensidade_5m = (df_a['Total Distance'].tail(5).sum() / 5) if 'Total Distance' in df_a.columns else 0
+
+                                cor_ponto = visual.CORES['ok_prontidao']
+                                if load_total > 400 and intensidade_5m < 70:
+                                    cor_ponto = visual.CORES['alerta_fadiga']
+                                elif load_total > 400 and intensidade_5m > 110:
+                                    cor_ponto = visual.CORES['aviso_carga']
+
+                                dados_radar.append({
+                                    'Atleta': atl,
+                                    'Load': load_total,
+                                    'Intensidade': intensidade_5m,
+                                    'Cor': cor_ponto
+                                })
+
+                        df_radar_elenco = pd.DataFrame(dados_radar)
+
+                        fig_radar_elenco = go.Figure()
+                        fig_radar_elenco.add_trace(go.Scatter(
+                            x=df_radar_elenco['Load'], y=df_radar_elenco['Intensidade'], mode='markers+text',
+                            text=df_radar_elenco['Atleta'], textposition="top center",
+                            marker=dict(size=14, color=df_radar_elenco['Cor'], line=dict(width=1, color='white')),
+                            hovertemplate="<b>%{text}</b><br>Load: %{x:.0f}<br>m/min (5m): %{y:.1f}<extra></extra>"
+                        ))
+
+                        media_load = df_radar_elenco['Load'].mean()
+                        media_int  = df_radar_elenco['Intensidade'].mean()
+                        fig_radar_elenco.add_vline(x=media_load, line_dash="dash", line_color="rgba(255,255,255,0.2)")
+                        fig_radar_elenco.add_hline(y=media_int,  line_dash="dash", line_color="rgba(255,255,255,0.2)")
+
+                        fig_radar_elenco.update_layout(
+                            template='plotly_dark', plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                            xaxis_title="Player Load Acumulado", yaxis_title="Intensidade (m/min — Últimos 5 min)",
+                            height=450, margin=dict(l=20, r=20, t=20, b=20), hovermode='closest'
+                        )
+                        
+                        # 4. AQUI O ÍNDICE 'i' FOI ADICIONADO PARA EVITAR O ERRO DE DUPLICAÇÃO DE CHAVE
+                        st.plotly_chart(fig_radar_elenco, width='stretch', key=f"radar_elenco_{periodo}_{jogo_alvo}_{i}")
+
+                        # Legenda dos quadrantes
+                        c1, c2, c3 = st.columns(3)
+                        c1.markdown(f"<span style='color:{visual.CORES['ok_prontidao']}'>🟢 Volume normal + Ritmo normal</span>", unsafe_allow_html=True)
+                        c2.markdown(f"<span style='color:{visual.CORES['aviso_carga']}'>🟡 Alto Load + Alta Intensidade</span>", unsafe_allow_html=True)
+                        c3.markdown(f"<span style='color:{visual.CORES['alerta_fadiga']}'>🔴 Alto Load + Baixa Intensidade (fadiga)</span>", unsafe_allow_html=True)
+                    else:
+                        st.info("Aguardando dados da equipe para o período selecionado.")
 
     painel_tracker_ao_vivo(campeonatos_selecionados, jogo_selecionado, atleta_selecionado, periodo_sel)

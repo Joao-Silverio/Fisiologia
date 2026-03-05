@@ -95,10 +95,26 @@ col_esq, col_dir = st.columns([0.28, 0.72], gap="medium")
 with col_esq:
     st.markdown("### 🔍 Configuração")
     
-    # 1. Competições
-    lista_campeonatos = sorted(df_cache_estatico['Competição'].dropna().unique().tolist()) if 'Competição' in df_cache_estatico.columns else []
-    competicoes_selecionadas = st.multiselect("🏆 Filtrar Competições:", options=lista_campeonatos, default=lista_campeonatos)
+    # 1. Campeonato e Jogo Lado a Lado
+    c_camp, c_jogo = st.columns(2)
     
+    lista_campeonatos = sorted(df_cache_estatico['Competição'].dropna().unique().tolist())
+    with c_camp:
+        campeonatos_selecionados = st.multiselect("🏆 Campeonatos:", options=lista_campeonatos, default=[])
+        
+    df_base_estatico = df_cache_estatico[df_cache_estatico['Competição'].isin(campeonatos_selecionados)] if campeonatos_selecionados else df_cache_estatico.copy()
+    lista_jogos_display = df_base_estatico.drop_duplicates(subset=['Data']).sort_values(by='Data', ascending=False)['Data_Display'].tolist()
+    
+    with c_jogo: 
+        jogo_selecionado_display = st.selectbox("📅 Jogo:", lista_jogos_display)
+        
+    if not jogo_selecionado_display: 
+        st.warning("Nenhum dado encontrado.")
+        st.stop()
+        
+    jogo_selecionado = df_base_estatico[df_base_estatico['Data_Display'] == jogo_selecionado_display]['Data'].iloc[0]
+    df_jogo_filtrado = df_base_estatico[df_base_estatico['Data'] == jogo_selecionado].copy()
+
     # 2. Métrica Principal
     st.markdown("<br>", unsafe_allow_html=True)
     opcoes_metricas = {
@@ -209,12 +225,14 @@ with col_dir:
         # ==========================================
         # 2. TODAS AS ANÁLISES EM 5 ABAS
         # ==========================================
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tabScatter, tabLinhaBanda = st.tabs([
             "📈 Cronológica", 
             "⚽ Tática x Placar",
             "⚖️ Competições", 
             "🔥 Extremos",
-            "🏟️ Casa vs Fora"
+            "🏟️ Casa vs Fora",
+            "Scatter",
+            "Linha com Banda"
         ])
 
         nome_metrica_legivel = metricas_validas.get(metrica, metrica)
@@ -250,7 +268,7 @@ with col_dir:
                 plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                 margin=dict(l=20, r=20, t=40, b=40)
             )
-            st.plotly_chart(fig_placar, use_container_width=True, key="graf_placar_hia")
+            st.plotly_chart(fig_placar, width='stretch', key="graf_placar_hia")
 
         # --- ABA 3: COMPETIÇÕES ---
         with tab3:
@@ -263,7 +281,7 @@ with col_dir:
                         title=f"Variação de {nome_metrica_legivel}", template='plotly_dark'
                     )
                     fig_box.update_layout(showlegend=False, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig_box, use_container_width=True, key="graf_box")
+                    st.plotly_chart(fig_box, width='stretch', key="graf_box")
 
                 with c_graf2:
                     df_comp_sorted = df_plot.sort_values('Data')
@@ -275,7 +293,7 @@ with col_dir:
                         xaxis_title="Data", yaxis_title="", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                         legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5)
                     )
-                    st.plotly_chart(fig_line_comp, use_container_width=True, key="graf_line_comp")
+                    st.plotly_chart(fig_line_comp, width='stretch', key="graf_line_comp")
 
                 st.markdown("##### 📋 Resumo Estatístico")
                 df_stats = df_plot.groupby('Competição')[metrica].agg(
@@ -323,9 +341,36 @@ with col_dir:
             else:
                 st.warning("Não há dados suficientes sobre o Local do Jogo.")
 
+        with tabScatter:
+            df_scatter = df_comp_local[df_comp_local['Data'] == jogo_selecionado].copy()
+            df_scatter_agg = df_scatter.groupby('Name').agg(
+                Distancia=('Total Distance', 'sum'),
+                Player_Load=('Player Load', 'sum'),
+                HIA=('HIA', 'sum'),
+                Minutos=('Min_Num', 'max')
+            ).reset_index()
+            df_scatter_agg['Carga_por_min'] = df_scatter_agg['Player_Load'] / df_scatter_agg['Minutos'].clip(lower=1)
+
+            fig_scatter = px.scatter(
+                df_scatter_agg, x='Minutos', y='Player_Load',
+                size='HIA', color='Carga_por_min',
+                text='Name', hover_data=['Distancia', 'HIA'],
+                color_continuous_scale='RdYlGn',
+                labels={'Player_Load': 'Player Load Total', 'Minutos': 'Minutos Jogados',
+                        'Carga_por_min': 'Carga/min'},
+                size_max=40
+            )
+            fig_scatter.update_traces(textposition='top center', textfont_size=10)
+            fig_scatter.update_layout(
+                height=420, template='plotly_dark',
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(t=10, b=10)
+            )
+            st.plotly_chart(fig_scatter, width='stretch')
+
     # Inicializa o fragmento passando os filtros da esquerda
     painel_temporada_ao_vivo(
-        competicoes_selecionadas,
+        campeonatos_selecionados,
         metrica_visao,
         visao_tipo,
         atleta_alvo,

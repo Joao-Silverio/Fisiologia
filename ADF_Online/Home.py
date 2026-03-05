@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
 
 import Source.Dados.config as config
@@ -61,7 +62,7 @@ st.markdown(f"""
 
 # --------------------------------------------------
 # CABEÇALHO PADRÃO
-
+# --------------------------------------------------
 ui.renderizar_cabecalho(
     "Sports Performance Hub",
     "Painel central de análise fisiológica e tática",
@@ -127,7 +128,7 @@ try:
         """, unsafe_allow_html=True)
 
         # --------------------------------------------------
-        # KPI CARDS (Usando o padrão do projeto)
+        # KPI CARDS
         # --------------------------------------------------
         c1, c2, c3, c4 = st.columns(4)
 
@@ -153,77 +154,92 @@ try:
                 cor_borda=visual.CORES["ok_prontidao"]
             )
         with c4:
+            total_minutos = df["Min_Num"].sum() if "Min_Num" in df.columns else 0
             ui.renderizar_card_kpi(
-                "Recordes",
-                str(df_recordes["Name"].nunique()) if "Name" in df_recordes.columns else str(len(df_recordes)),
-                icone="🏆",
-                cor_borda=visual.CORES["alerta_fadiga"]
+                "Tempo Monitorado",
+                f"{total_minutos / 60:.0f}h",
+                icone="⏱️",
+                cor_borda=visual.CORES["aviso_carga"]
             )
 
         st.divider()
 
         # --------------------------------------------------
-        # RANKING + GRÁFICO
+        # GRÁFICO: DISPERSÃO CARGA VS INTENSIDADE
         # --------------------------------------------------
-        col_left, col_right = st.columns([1.4, 1])
+        st.markdown("#### 🔵 Dispersão do Plantel — Carga vs Intensidade")
 
-        # -----------------------------
-        # RANKING
-        # -----------------------------
-        with col_left:
-            st.markdown("#### Ranking de Carga (HIA)")
+        colunas_necessarias = {'Name', 'Data_Display', 'Total Distance', 'HIA', 'Player Load', 'Min_Num'}
+        
+        if colunas_necessarias.issubset(df.columns):
+            lista_jogos = df['Data_Display'].dropna().unique().tolist()
+            
+            if lista_jogos:
+                # Usa uma coluna menor apenas para o selectbox não ficar esticado na tela toda
+                col_sel, _ = st.columns([1, 3])
+                with col_sel:
+                    jogo_home = st.selectbox("Selecione o Jogo:", lista_jogos, key="sel_scatter_home")
+                
+                df_home_jogo = df[df['Data_Display'] == jogo_home]
+                
+                df_home_agg  = df_home_jogo.groupby('Name').agg(
+                    Distancia=('Total Distance', 'sum'),
+                    HIA=('HIA', 'sum'),
+                    Player_Load=('Player Load', 'sum'),
+                    Minutos=('Min_Num', 'max')
+                ).reset_index()
 
-            if {"Name", "HIA"}.issubset(df.columns):
-                ranking_hia = (
-                    df.groupby("Name", as_index=False)["HIA"]
-                    .sum()
-                    .sort_values("HIA", ascending=False)
-                    .head(8)
+                media_dist_h = df_home_agg['Distancia'].mean()
+                media_hia_h  = df_home_agg['HIA'].mean()
+
+                # Cores por quadrante
+                def cor_quadrante(row):
+                    if row['Distancia'] >= media_dist_h and row['HIA'] >= media_hia_h: return '#22C55E'  # ideal
+                    if row['Distancia'] < media_dist_h  and row['HIA'] < media_hia_h:  return '#EF4444'  # alerta
+                    return '#F59E0B'  # misto
+
+                df_home_agg['cor'] = df_home_agg.apply(cor_quadrante, axis=1)
+
+                fig_home_scatter = go.Figure()
+                fig_home_scatter.add_trace(go.Scatter(
+                    x=df_home_agg['Distancia'], y=df_home_agg['HIA'],
+                    mode='markers+text', text=df_home_agg['Name'],
+                    textposition='top center', textfont=dict(size=10),
+                    marker=dict(size=df_home_agg['Player_Load'] / df_home_agg['Player_Load'].max() * 30 + 8,
+                                color=df_home_agg['cor'], line=dict(width=1, color='white')),
+                    hovertemplate="<b>%{text}</b><br>Distância: %{x:.0f}m<br>HIA: %{y:.0f}<extra></extra>"
+                ))
+
+                # Linhas de média (quadrantes)
+                fig_home_scatter.add_vline(x=media_dist_h, line_dash="dash", line_color="rgba(255,255,255,0.2)")
+                fig_home_scatter.add_hline(y=media_hia_h,  line_dash="dash", line_color="rgba(255,255,255,0.2)")
+
+                # Labels dos quadrantes adaptadas e encurtadas para telas menores
+                fig_home_scatter.add_annotation(text="✅ Alto Vol + Alta Int", x=df_home_agg['Distancia'].max(), y=df_home_agg['HIA'].max(), showarrow=False, font=dict(color='#22C55E', size=11), xanchor='right', yanchor='bottom')
+                fig_home_scatter.add_annotation(text="⚠️ Baixo Vol + Baixa Int", x=df_home_agg['Distancia'].min(), y=df_home_agg['HIA'].min(), showarrow=False, font=dict(color='#EF4444', size=11), xanchor='left', yanchor='top')
+
+                fig_home_scatter.update_layout(
+                    height=450, template='plotly_dark',
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    xaxis_title="Distância Total (m)", yaxis_title="HIA Total",
+                    margin=dict(t=10, b=10, l=10, r=10)
                 )
-                ranking_hia["HIA"] = ranking_hia["HIA"].round(1)
+                st.plotly_chart(fig_home_scatter, width='stretch', key="plot_home_scatter")
 
-                st.dataframe(
-                    ranking_hia.rename(columns={"Name": "Atleta", "HIA": "HIA Acumulado"}),
-                    width='stretch',
-                    hide_index=True
-                )
+                # Legenda Responsiva em HTML (Evita quebrar em telas pequenas)
+                st.markdown("""
+                    <div style='display:flex; flex-wrap:wrap; gap:20px; font-size:0.9rem; padding-top:10px; justify-content:center;'>
+                        <span style='color:#22C55E;'>🟢 <b>Alto Volume + Alta Intensidade</b> (Ideal)</span>
+                        <span style='color:#F59E0B;'>🟡 <b>Misto</b> (Analisar individualmente)</span>
+                        <span style='color:#EF4444;'>🔴 <b>Baixo Volume + Baixa Intensidade</b> (Alerta)</span>
+                        <span style='color:#94A3B8;'>⚫ <b>Tamanho da bolha:</b> Player Load</span>
+                    </div>
+                """, unsafe_allow_html=True)
             else:
-                st.info("Sem colunas suficientes para ranking.")
+                st.info("Nenhum jogo encontrado no histórico.")
+        else:
+            st.info("Colunas insuficientes para o gráfico de dispersão.")
 
-        # -----------------------------
-        # GRÁFICO
-        # -----------------------------
-        with col_right:
-            st.markdown("#### Sessões por Dia")
-
-            if "Data" in df.columns:
-                series = pd.to_datetime(df["Data"], errors="coerce").dropna().dt.date
-
-                if not series.empty:
-                    freq = pd.Series(series).value_counts().sort_index().tail(10)
-                    
-                    # Gráfico Plotly com design integrado
-                    fig = px.bar(
-                        x=freq.index,
-                        y=freq.values,
-                    )
-                    # Aplica as cores padrão definidas no seu visual.py
-                    fig.update_traces(marker_color=visual.CORES["secundaria"])
-                    # 1. Aplica o template base primeiro
-                    fig.update_layout(**visual.PLOTLY_TEMPLATE['layout'])
-                    
-                    # 2. Sobrescreve apenas os atributos específicos deste gráfico
-                    fig.update_layout(
-                        height=320,
-                        margin=dict(l=0, r=0, t=20, b=0),
-                        xaxis_title="",
-                        yaxis_title=""
-                    )
-                    st.plotly_chart(fig, width='stretch')
-                else:
-                    st.info("Sem datas válidas.")
-            else:
-                st.info("Sem coluna Data.")
     else:
         st.warning("Ficheiro Excel vazio.")
 
