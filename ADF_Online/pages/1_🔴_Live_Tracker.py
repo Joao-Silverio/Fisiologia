@@ -17,6 +17,8 @@ if 'df_global' not in st.session_state or st.session_state['df_global'].empty:
     st.warning("⚠️ Carregue os dados na página principal (Home) primeiro.")
     st.stop()
 
+modo_apres = ui.renderizar_toggle_apresentacao()
+
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
 
@@ -66,6 +68,15 @@ def renderizar_kpi_mini(titulo, valor, cor_borda=None, icone="📊", delta=None,
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
+
+    st.markdown("""
+        <style>
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.6; }
+            }
+        </style>
+    """, unsafe_allow_html=True)
 
 # =====================================================================
 # LAYOUT PRINCIPAL: 30% ESQUERDA (FILTROS) | 70% DIREITA (PAINEL)
@@ -248,6 +259,43 @@ with col_dir:
                     return f"<span style='color: {cor};'>{abs(x):.1f}%</span>"
 
                 cor_delta = "normal" if metrica in ["V4 Dist", "HIA", "Total Distance"] else "inverse"
+
+                # 🆕 ALERTA DE FADIGA — Calcula delta de cada atleta no jogo atual
+                alertas_fadiga = []
+                for nome_atleta in df_base[df_base['Data'] == jogo_alvo]['Name'].unique():
+                    df_hist_a = df_base[(df_base['Name'] == nome_atleta) & 
+                                        (df_base['Data'] != jogo_alvo) & 
+                                        (df_base['Período'] == periodo)]
+                    df_hoje_a = df_base[(df_base['Name'] == nome_atleta) & 
+                                        (df_base['Data'] == jogo_alvo) & 
+                                        (df_base['Período'] == periodo) &
+                                        (df_base[coluna_minuto] <= minuto_atual_max)]
+                    
+                    if df_hist_a.empty or df_hoje_a.empty:
+                        continue
+                    
+                    carga_hoje_a = df_hoje_a['Total Distance'].sum()
+                    media_hist_a = df_hist_a.groupby('Data')['Total Distance'].sum().mean()
+                    delta_a = ((carga_hoje_a / media_hist_a) - 1) * 100 if media_hist_a > 0 else 0
+                    
+                    if delta_a > 20:
+                        alertas_fadiga.append((nome_atleta, delta_a, "🔴 Sobrecarga"))
+                    elif delta_a < -20:
+                        alertas_fadiga.append((nome_atleta, delta_a, "🟡 Abaixo do padrão"))
+
+                if alertas_fadiga:
+                    with st.expander(f"⚠️ {len(alertas_fadiga)} atleta(s) fora do padrão — clique para ver", expanded=True):
+                        cols_alerta = st.columns(len(alertas_fadiga))
+                        for col_a, (nome_a, delta_a, tipo_a) in zip(cols_alerta, alertas_fadiga):
+                            cor_a = visual.CORES["alerta_fadiga"] if delta_a > 0 else visual.CORES["aviso_carga"]
+                            col_a.markdown(f"""
+                                <div style='border:2px solid {cor_a}; border-radius:8px; padding:10px; text-align:center;
+                                            background:{cor_a}22; animation: pulse 2s infinite;'>
+                                    <b style='color:{cor_a}'>{tipo_a}</b><br>
+                                    <span style='font-size:0.9rem'>{nome_a}</span><br>
+                                    <b style='color:{cor_a}; font-size:1.2rem'>{delta_a:+.1f}%</b>
+                                </div>
+                            """, unsafe_allow_html=True)
 
                 st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
                 k0, k1, k2, k3, k4, k5, k6 = st.columns(7, gap="small")

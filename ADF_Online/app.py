@@ -25,7 +25,7 @@ paginas = {
         st.Page("pages/2_📊_Relatorio_HIA.py", title="Relatório HIA", icon=":material/analytics:"),
         st.Page("pages/4_📅_Temporada.py", title="Visão Temporada", icon=":material/calendar_month:"),
         st.Page("pages/5_⚔️_Comparacao_Atletas.py", title="Comparação", icon=":material/compare_arrows:"),
-        st.Page("pages/6_👤_Individual_Atleta.py", title="Visão Individual", icon=":material/person:"),
+        st.Page("pages/6_👤_Individual_Atleta.py", title="Atleta", icon=":material/person:"),
     ]
 }
 

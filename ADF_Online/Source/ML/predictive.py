@@ -29,6 +29,10 @@ import xgboost as xgb
 
 import Source.Dados.config as config
 from Source.Dados.data_loader import load_global_data
+# Após os outros imports
+from Source.Dados.positions import get_position
+
+POSICAO_ENCODE = {"GOL": 0, "ZAG": 1, "LAT": 2, "MEI": 3, "ATA": 4}
 
 warnings.filterwarnings('ignore')
 
@@ -36,7 +40,7 @@ warnings.filterwarnings('ignore')
 # CONFIGURAÇÕES
 # ─────────────────────────────────────────────────────────────────────────────
 CAMINHO_EXCEL        = os.path.join(DIRETORIO_ATUAL, 'ADF OnLine 2024.xlsb')
-DIRETORIO_MODELOS    = os.path.join(DIRETORIO_ATUAL, 'Models')
+DIRETORIO_MODELOS    = os.path.join(RAIZ_PROJETO, 'Models')
 RANDOM_STATE         = 42
 
 print("=" * 65)
@@ -64,6 +68,27 @@ if df is None:
     exit()
 
 # O df já vem com: HIA, Jogou_em_Casa, Diff_Gols (min a min) e Fillna(0).
+
+# 🆕 Minutagem acumulada na temporada (fadiga crônica)
+df_min_temporada = (
+    df.groupby(['Name', 'Data', 'Período'])['Interval']
+    .max()
+    .reset_index()
+    .rename(columns={'Interval': '_min_jogo'})
+)
+df_min_temporada = df_min_temporada.sort_values(['Name', 'Data'])
+df_min_temporada['Minutagem_Temporada'] = (
+    df_min_temporada.groupby('Name')['_min_jogo']
+    .transform(lambda x: x.expanding().sum().shift(1).fillna(0))
+)
+df_min_temporada = df_min_temporada.drop(columns='_min_jogo')
+df = df.merge(df_min_temporada, on=['Name', 'Data', 'Período'], how='left')
+df['Minutagem_Temporada'] = df['Minutagem_Temporada'].fillna(0)
+
+# 🆕 Posição codificada
+df['Posicao_encoded'] = df['Name'].apply(
+    lambda n: POSICAO_ENCODE.get(get_position(n), -1)
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. HISTÓRICO COM TARGET EQUIVALENTE E HERANÇA DO 1º TEMPO
@@ -148,7 +173,9 @@ for metric_target in MAPA_METRICAS.keys():
         'N_Jogos', 
         'Carga_3Jogos_PL',
         'Diff_Gols', 'Jogou_em_Casa',
-        f'{metric_target}_Acumulado_Agora',   
+        f'{metric_target}_Acumulado_Agora', 
+        'Posicao_encoded',
+        'Minutagem_Temporada',   
         f'Ritmo_{metric_target}',            # <-- Nova Inteligência de Pacing 
         f'Media_Geral_{metric_target}',       
         f'Trend_{metric_target}'              

@@ -8,6 +8,9 @@ import pickle
 import numpy as np
 import pandas as pd
 import Source.Dados.config as config
+from Source.Dados.positions import get_position
+
+POSICAO_ENCODE = {"GOL": 0, "ZAG": 1, "LAT": 2, "MEI": 3, "ATA": 4}
 
 MAPA_METRICAS = {
     'Dist_Total': 'Total Distance',
@@ -137,22 +140,55 @@ def executar_ml_ao_vivo(
     trend_dist = media_3j / (media_geral_num + 1) if media_geral_num > 0 else 1.0
     carga_3jogos_pl = df_historico.groupby(coluna_jogo)['Player Load'].sum().tail(3).sum() if 'Player Load' in df_historico.columns else 0
 
-    media_min_geral = df_historico.groupby(coluna_minuto)[coluna_distancia].mean()
-
+    media_min_geral = (
+        df_historico.groupby(coluna_minuto)[coluna_distancia]
+        .mean()
+        .rolling(3, min_periods=1, center=True)
+        .mean()
+    )
     modelo_dict = carregar_modelo_treinado(DIRETORIO_ATUAL, metrica_selecionada, periodo)
     acumulado_pred = []
 
+        # 🆕 Ritmo atual (pacing) — acumulado / minuto atual
+    ritmo_atual = carga_atual / max(minuto_atual, 1)
+
+    # 🆕 Minutagem acumulada na temporada
+    datas_anteriores_todas = df_historico[coluna_jogo].unique()
+    minutagem_temporada = (
+        df_historico[df_historico[coluna_jogo].isin(datas_anteriores_todas)]
+        .groupby(coluna_jogo)[coluna_minuto].max().sum()
+    )
+
+    # 🆕 Posição codificada
+    posicao_atleta = get_position(atleta_selecionado)
+    posicao_encoded = POSICAO_ENCODE.get(posicao_atleta, -1)
+
+    # 🆕 Total do 1º tempo (para inferência do 2º tempo)
+    total_t1 = 0
+    if periodo == 2:
+        df_t1_atleta = df_base[
+            (df_base['Name'] == atleta_selecionado) &
+            (df_base['Data'] == jogo_atual_nome) &
+            (df_base['Período'] == 1)
+        ]
+        if not df_t1_atleta.empty and coluna_distancia in df_t1_atleta.columns:
+            total_t1 = df_t1_atleta[coluna_distancia].sum()
+
     if modelo_dict is not None:
         row_atleta = {
-            'Min_Num': minuto_atual,
-            'Dias_Descanso': dias_desc,
-            'N_Jogos': df_historico[coluna_jogo].nunique(),
-            'Carga_3Jogos_PL': carga_3jogos_pl,
-            'Diff_Gols': 1 if resultado_ctx == 'V' else (-1 if resultado_ctx == 'D' else 0),
-            'Jogou_em_Casa': jogou_em_casa_val,
+            'Min_Num':            minuto_atual,
+            'Dias_Descanso':      dias_desc,
+            'N_Jogos':            df_historico[coluna_jogo].nunique(),
+            'Carga_3Jogos_PL':    carga_3jogos_pl,
+            'Diff_Gols':          1 if resultado_ctx == 'V' else (-1 if resultado_ctx == 'D' else 0),
+            'Jogou_em_Casa':      jogou_em_casa_val,
+            'Posicao_encoded':    posicao_encoded,           # 🆕 Alta
+            'Minutagem_Temporada': minutagem_temporada,      # 🆕 Média
             f'{metric_target}_Acumulado_Agora': carga_atual,
+            f'Ritmo_{metric_target}':  ritmo_atual,          # 🐛 bug fix
             f'Media_Geral_{metric_target}': media_geral_num,
-            f'Trend_{metric_target}': trend_dist
+            f'Trend_{metric_target}':  trend_dist,
+            f'Total_T1_{metric_target}': total_t1 if periodo == 2 else 0,  # 🐛 bug fix
         }
 
         try:

@@ -211,3 +211,44 @@ def renderizar_painel_ao_vivo(df_original, pagina_atual):
     with c3:
         if 'Placar' in df_ativo.columns:
             st.metric("Placar Atualizado", str(df_ativo['Placar'].iloc[-1]))
+
+def renderizar_toggle_apresentacao():
+    """Toggle que oculta filtros e expande gráficos para apresentação."""
+    if 'modo_apresentacao' not in st.session_state:
+        st.session_state['modo_apresentacao'] = False
+
+    col_toggle = st.columns([8, 1])[1]
+    with col_toggle:
+        if st.button(
+            "🎬" if not st.session_state['modo_apresentacao'] else "✏️",
+            help="Modo Apresentação" if not st.session_state['modo_apresentacao'] else "Modo Edição",
+            key="btn_modo_apresentacao"
+        ):
+            st.session_state['modo_apresentacao'] = not st.session_state['modo_apresentacao']
+            st.rerun()
+
+    if st.session_state['modo_apresentacao']:
+        st.markdown("""
+            <style>
+                /* Oculta filtros e controles */
+                [data-testid="stSidebar"],
+                div[data-testid="stVerticalBlock"] > div:nth-child(-n+3) [data-testid="stHorizontalBlock"]:first-of-type,
+                div[data-testid="stSelectbox"],
+                div[data-testid="stMultiSelect"],
+                div[data-testid="stRadio"],
+                div[data-testid="stSlider"],
+                div[data-testid="stPills"] { display: none !important; }
+                
+                /* Expande gráficos */
+                .block-container { 
+                    max-width: 100% !important; 
+                    padding: 1rem !important; 
+                }
+                
+                /* Fonte maior nos valores */
+                [data-testid="stMetricValue"] { font-size: 2rem !important; }
+            </style>
+        """, unsafe_allow_html=True)
+        st.info("🎬 Modo Apresentação ativo — clique em ✏️ para voltar ao modo edição")
+    
+    return st.session_state['modo_apresentacao']
