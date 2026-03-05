@@ -113,8 +113,6 @@ with col_esq:
 # ÁREA DIREITA: FRAGMENTO DE ATUALIZAÇÃO (GRÁFICO EMPILHADO + KPIS)
 # =====================================================================
 with col_dir:
-    st.markdown(f"### ⏱️ Espectro de Intensidade: {atleta_selecionado} ({periodo_sel}º Tempo)")
-
     @st.fragment(run_every="5s")
     def painel_hia_ao_vivo(campeonatos, jogo_alvo, atleta, periodo):
         """Atualiza o gráfico de HIA dinamicamente em tempo real."""
@@ -175,6 +173,21 @@ with col_dir:
         # =====================================================================
         # GRÁFICO PLOTLY EMPILHADO
         # =====================================================================
+
+        # =====================================================================
+        # 5 MINIS KPIs EM UMA ÚNICA LINHA ABAIXO DO GRÁFICO
+        # =====================================================================
+        st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
+        k1, k2, k3, k4, k5 = st.columns(5, gap="small")
+        
+        with k1: renderizar_kpi_mini("Minutos", f"{minuto_maximo}m", icone="⏱️")
+        with k2: renderizar_kpi_mini("HIA Total", f"{total_hia_periodo:.0f}", cor_borda=visual.CORES["alerta_fadiga"], icone="⚡")
+        with k3: renderizar_kpi_mini("Equipe", f"{media_hia_equipe:.1f}", delta=f"{delta_vs_equipe:+.1f}% vs Equipe", delta_color="normal", icone="👥")
+        with k4: renderizar_kpi_mini("Densidade", f"{densidade:.2f}", icone="📊")
+        with k5: renderizar_kpi_mini("S/ Estímulo", f"{maior_gap_descanso}m", delta="Recuperação", delta_color="off", cor_borda=visual.CORES["ok_prontidao"], icone="🔋")
+
+        st.markdown(f"### ⏱️ Espectro de Intensidade: {atleta_selecionado} ({periodo_sel}º Tempo)")
+
         df_melted = df_timeline_full.melt(id_vars=['Interval'], value_vars=cols_componentes_hia, var_name='Tipo de Esforço', value_name='Qtd Ações')
         df_melted = df_melted[df_melted['Qtd Ações'] > 0]
 
@@ -203,18 +216,7 @@ with col_dir:
 
         st.plotly_chart(fig, width='stretch', key=f"hia_stacked_{periodo}_{atleta}")
         
-        # =====================================================================
-        # 5 MINIS KPIs EM UMA ÚNICA LINHA ABAIXO DO GRÁFICO
-        # =====================================================================
-        st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
-        k1, k2, k3, k4, k5 = st.columns(5, gap="small")
         
-        with k1: renderizar_kpi_mini("Minutos", f"{minuto_maximo}m", icone="⏱️")
-        with k2: renderizar_kpi_mini("HIA Total", f"{total_hia_periodo:.0f}", cor_borda=visual.CORES["alerta_fadiga"], icone="⚡")
-        with k3: renderizar_kpi_mini("Equipe", f"{media_hia_equipe:.1f}", delta=f"{delta_vs_equipe:+.1f}% vs Equipe", delta_color="normal", icone="👥")
-        with k4: renderizar_kpi_mini("Densidade", f"{densidade:.2f}", icone="📊")
-        with k5: renderizar_kpi_mini("S/ Estímulo", f"{maior_gap_descanso}m", delta="Recuperação", delta_color="off", cor_borda=visual.CORES["ok_prontidao"], icone="🔋")
-
     # Inicia o bloco fragmentado
     painel_hia_ao_vivo(
         campeonatos_selecionados, 
