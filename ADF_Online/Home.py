@@ -172,7 +172,7 @@ try:
         colunas_necessarias = {'Name', 'Data_Display', 'Total Distance', 'HIA', 'Player Load', 'Min_Num'}
         
         if colunas_necessarias.issubset(df.columns):
-            lista_jogos = df['Data_Display'].sort_values(ascending=False).dropna().unique().tolist()
+            lista_jogos = df['Data_Display'].sort_values(ascending=True).dropna().unique().tolist()
             
             if lista_jogos:
                 # Usa uma coluna menor apenas para o selectbox não ficar esticado na tela toda
