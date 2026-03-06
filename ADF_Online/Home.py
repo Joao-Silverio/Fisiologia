@@ -178,7 +178,7 @@ try:
                 # Usa uma coluna menor apenas para o selectbox não ficar esticado na tela toda
                 col_sel, _ = st.columns([1, 3])
                 with col_sel:
-                    jogo_home = st.selectbox("Selecione o Jogo:", lista_jogos, key="sel_scatter_home")
+                    jogo_home = st.selectbox("Selecione o Jogo:", lista_jogos, key="sel_scatter_home", ascending=False)
                 
                 df_home_jogo = df[df['Data_Display'] == jogo_home]
                 
