@@ -172,13 +172,13 @@ try:
         colunas_necessarias = {'Name', 'Data_Display', 'Total Distance', 'HIA', 'Player Load', 'Min_Num'}
         
         if colunas_necessarias.issubset(df.columns):
-            lista_jogos = df['Data_Display'].dropna().unique().tolist()
+            lista_jogos = df['Data_Display', ascending=False].dropna().unique().tolist()
             
             if lista_jogos:
                 # Usa uma coluna menor apenas para o selectbox não ficar esticado na tela toda
                 col_sel, _ = st.columns([1, 3])
                 with col_sel:
-                    jogo_home = st.selectbox("Selecione o Jogo:", lista_jogos, key="sel_scatter_home", ascending=False)
+                    jogo_home = st.selectbox("Selecione o Jogo:", lista_jogos, key="sel_scatter_home")
                 
                 df_home_jogo = df[df['Data_Display'] == jogo_home]
                 
